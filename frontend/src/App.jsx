@@ -8,17 +8,8 @@ import { useAuthStore } from './hooks/useStore';
 
 // Lazy page imports
 import Dashboard from './pages/Dashboard';
-import Compliance from './pages/Compliance';
-import Dues from './pages/Dues';
-import Accounting from './pages/Accounting';
-import Tax from './pages/Tax';
-import Violations from './pages/Violations';
-import Maintenance from './pages/Maintenance';
-import Vendors from './pages/Vendors';
-import Residents from './pages/Residents';
-import Documents from './pages/Documents';
-import Communications from './pages/Communications';
-import Communities from './pages/Communities';
+
+import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities } from './pages/index.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
