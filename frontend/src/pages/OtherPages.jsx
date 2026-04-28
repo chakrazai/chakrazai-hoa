@@ -245,7 +245,7 @@ export function Residents() {
   const [search, setSearch] = useState('');
   const { data: list } = useQuery({ queryKey:['residents'], queryFn:()=>residentAPI.list(1).then(r=>r.data), placeholderData:MOCK_RESIDENTS });
   const residents = list || MOCK_RESIDENTS;
-  const filtered = useMemo(()=>residents.filter(r=>r.owner.toLowerCase().includes(search.toLowerCase())||r.unit.toLowerCase().includes(search.toLowerCase())),[search, residents]);
+  const filtered = useMemo(()=>residents.filter(r=>(r.owner||r.owner_name||"").toLowerCase().includes(search.toLowerCase())||(r.unit||"").toLowerCase().includes(search.toLowerCase())),[search, residents]);
 
   return (
     <div className="page-enter">
