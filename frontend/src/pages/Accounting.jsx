@@ -1,154 +1,106 @@
 import { useQuery } from '@tanstack/react-query';
+import { Download, Plus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangle } from 'lucide-react';
-import { MetricCard, Card, CardHeader, Alert, Badge, Button, ProgressBar, StatusDot, LoadingSpinner, ErrorMessage, formatCurrency, formatPct } from '../components/ui';
-import { communityAPI, complianceAPI } from '../lib/api';
+import { MetricCard, Card, CardHeader, Button, ProgressBar, SectionHeader, formatCurrency } from '../components/ui';
+import { accountingAPI } from '../lib/api';
 
-// Fallback mock data for when API isn't connected yet
-const MOCK_METRICS = {
-  totalUnits: 148, collectionRate: 94.6, collectionRateChange: 2.1,
-  monthlyRevenue: 22348, reserveFund: 184200, reserveFundPct: 61,
-};
-const MOCK_FINANCIALS = [
-  { month:'Nov', income:20800, expenses:17200 }, { month:'Dec', income:21000, expenses:19800 },
-  { month:'Jan', income:20200, expenses:16900 }, { month:'Feb', income:21600, expenses:17400 },
-  { month:'Mar', income:21900, expenses:18100 }, { month:'Apr', income:22348, expenses:18205 },
+const MOCK_SUMMARY = { operatingBalance:48320, reserveBalance:184200, reservePct:61, monthlyIncome:22348, monthlyExpenses:18205, netIncome:4143 };
+const MOCK_HISTORY = [
+  { month:'Nov', income:20800, expenses:17200 },
+  { month:'Dec', income:21000, expenses:19800 },
+  { month:'Jan', income:20200, expenses:16900 },
+  { month:'Feb', income:21600, expenses:17400 },
+  { month:'Mar', income:21900, expenses:18100 },
+  { month:'Apr', income:22348, expenses:18205 },
 ];
-const MOCK_COMPLIANCE = [
-  { id:'ab130',  law:'AB 130', title:'Fine Schedule Caps',        status:'action_required', detail:'3 fines exceed the new $100/violation cap.' },
-  { id:'sb326',  law:'SB 326', title:'Balcony Inspections',       status:'warning',         detail:'Not yet scheduled. 187 days remaining.' },
-  { id:'ab2159', law:'AB 2159',title:'Electronic Voting',         status:'compliant',        detail:'System configured. Paper backup available.' },
-  { id:'solar',  law:'Solar',  title:'Solar Panel Policy',        status:'compliant',        detail:'Policy adopted March 2025.' },
-  { id:'sb900',  law:'SB 900', title:'Utility Repairs (14-Day)', status:'compliant',        detail:'SLA tracking active.' },
+const MOCK_EXPENSES = [
+  { category:'Landscaping',         vendor:'Greenscape',  amount:4200 },
+  { category:'Pool & Spa',          vendor:'AquaCare',    amount:1800 },
+  { category:'Security',            vendor:'SecureWatch', amount:3200 },
+  { category:'Insurance',           vendor:'HOA Mutual',  amount:2400 },
+  { category:'Utilities',           vendor:'Various',     amount:1950 },
+  { category:'Administrative',      vendor:'Internal',    amount:820  },
+  { category:'Reserve contribution', vendor:'Reserve',    amount:3835 },
 ];
 
-export default function Dashboard({ onNavigate }) {
-  const communityId = 1; // TODO: get from store
+export default function Accounting() {
+  const { data: summary } = useQuery({ queryKey:['accounting-summary'], queryFn:()=>accountingAPI.summary(1).then(r=>r.data), placeholderData:MOCK_SUMMARY });
+  const { data: history }  = useQuery({ queryKey:['accounting-history'], queryFn:()=>accountingAPI.history(1).then(r=>r.data),  placeholderData:MOCK_HISTORY  });
 
-  const { data: metrics, isLoading: metricsLoading, error: metricsError } = useQuery({
-    queryKey: ['dashboard', communityId],
-    queryFn: () => communityAPI.dashboard(communityId).then(r => r.data),
-    // Falls back to mock if API not connected
-    placeholderData: MOCK_METRICS,
-  });
-
-  const { data: compliance } = useQuery({
-    queryKey: ['compliance', 'ca'],
-    queryFn: () => complianceAPI.alerts('ca').then(r => r.data),
-    placeholderData: MOCK_COMPLIANCE,
-  });
-
-  const { data: financials } = useQuery({
-    queryKey: ['financials', communityId],
-    queryFn: () => communityAPI.dashboard(communityId).then(r => r.data?.monthlyFinancials),
-    placeholderData: MOCK_FINANCIALS,
-  });
-
-  const m = metrics || MOCK_METRICS;
-  const complianceData = compliance || MOCK_COMPLIANCE;
-  const financialData = financials || MOCK_FINANCIALS;
-
-  const urgentAlerts = complianceData.filter(a => a.status === 'action_required' || a.status === 'warning');
-  const passing = complianceData.filter(a => a.status === 'compliant').length;
-
-  if (metricsLoading) return <LoadingSpinner />;
+  const s = summary || MOCK_SUMMARY;
+  const h = history || MOCK_HISTORY;
+  const total = MOCK_EXPENSES.reduce((acc,e)=>acc+e.amount,0);
 
   return (
     <div className="page-enter">
-      {/* Compliance alerts */}
-      {urgentAlerts.slice(0, 2).map(a => (
-        <Alert key={a.id} variant={a.status === 'action_required' ? 'danger' : 'warning'}
-          title={`${a.law} — ${a.title}`}>
-          {a.detail}{' '}
-          <button onClick={() => onNavigate('compliance')} className="font-medium underline">View compliance →</button>
-        </Alert>
-      ))}
+      <SectionHeader title="Accounting" subtitle="Bank-synced financials, reserve tracking, and budget reporting"
+        action={<><Button variant="secondary" size="sm"><Download size={12}/>Export</Button><Button variant="primary" size="sm"><Plus size={12}/>Add Transaction</Button></>} />
 
-      {/* Metrics */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <MetricCard label="Total Units"     value={m.totalUnits}                       sub="Oakwood Estates" />
-        <MetricCard label="Collection Rate" value={formatPct(m.collectionRate)}         sub={`+${m.collectionRateChange}% vs last month`} subVariant="good" />
-        <MetricCard label="Monthly Revenue" value={formatCurrency(m.monthlyRevenue)}    sub="$150/unit average" />
-        <MetricCard label="Reserve Fund"    value={formatCurrency(m.reserveFund)}       sub={`${m.reserveFundPct}% funded`} subVariant="warn" />
+        <MetricCard label="Operating Account" value={formatCurrency(s.operatingBalance)} sub="Synced Apr 26" subVariant="good" />
+        <MetricCard label="Reserve Fund"       value={formatCurrency(s.reserveBalance)}  sub={`${s.reservePct}% funded`} subVariant="warn" />
+        <MetricCard label="Monthly Income"     value={formatCurrency(s.monthlyIncome)}   sub="April 2026" />
+        <MetricCard label="Net Income"         value={formatCurrency(s.netIncome)}        sub={`vs ${formatCurrency(s.monthlyExpenses)} expenses`} subVariant="good" />
       </div>
 
-      {/* Charts row */}
       <div className="grid grid-cols-2 gap-5 mb-5">
         <Card>
-          <CardHeader title="Revenue vs. Expenses (6 mo)"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('accounting')}>Full report →</Button>} />
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={financialData} margin={{ top:0, right:0, left:-22, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f4f5f7" />
-              <XAxis dataKey="month" tick={{ fontSize:10, fill:'#737f96' }} />
-              <YAxis tick={{ fontSize:9, fill:'#737f96' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={v => formatCurrency(v)} contentStyle={{ fontSize:11, borderRadius:8 }} />
-              <Bar dataKey="income"   fill="#1e3a7a" radius={[3,3,0,0]} name="Income" />
-              <Bar dataKey="expenses" fill="#e2e5ec" radius={[3,3,0,0]} name="Expenses" />
+          <CardHeader title="Income vs. Expenses (6 months)" />
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={h} margin={{top:0,right:0,left:-18,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f4f5f7"/>
+              <XAxis dataKey="month" tick={{fontSize:10,fill:'#737f96'}}/>
+              <YAxis tick={{fontSize:9,fill:'#737f96'}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+              <Tooltip formatter={v=>formatCurrency(v)} contentStyle={{fontSize:11,borderRadius:8}}/>
+              <Bar dataKey="income"   fill="#1e3a7a" radius={[3,3,0,0]} name="Income"/>
+              <Bar dataKey="expenses" fill="#c5cad6" radius={[3,3,0,0]} name="Expenses"/>
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card>
-          <CardHeader title="Compliance — California"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('compliance')}>View all →</Button>} />
-          {complianceData.map(a => (
-            <div key={a.id} className="flex items-start gap-3 py-2 border-b border-slate-50 last:border-0">
-              <StatusDot status={a.status === 'action_required' ? 'red' : a.status === 'warning' ? 'amber' : 'green'} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-700">{a.law} — {a.title}</p>
-                <p className="text-[11px] text-slate-400 truncate">{a.detail}</p>
+          <CardHeader title="Expense Breakdown — April 2026" />
+          {MOCK_EXPENSES.map(e => (
+            <div key={e.category} className="mb-2.5">
+              <div className="flex justify-between mb-1">
+                <span className="text-xs font-medium text-slate-700">{e.category}</span>
+                <span className="text-xs font-bold text-slate-800">{formatCurrency(e.amount)}</span>
               </div>
+              <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-navy-600 rounded-full" style={{width:`${Math.round(e.amount/total*100)}%`}}/>
+              </div>
+              <span className="text-[10px] text-slate-400">{e.vendor} · {Math.round(e.amount/total*100)}%</span>
             </div>
           ))}
-          <div className="mt-3 pt-2 border-t border-slate-100">
-            <div className="flex justify-between text-xs mb-1.5">
-              <span className="text-slate-500">Overall compliance</span>
-              <span className="font-medium text-slate-700">{passing}/{complianceData.length} passing</span>
-            </div>
-            <ProgressBar value={passing} max={complianceData.length}
-              color={passing/complianceData.length >= 0.8 ? 'emerald' : 'amber'} />
+          <div className="flex justify-between pt-3 border-t border-slate-200 mt-1">
+            <span className="text-xs font-bold text-slate-700">Total Expenses</span>
+            <span className="text-sm font-bold text-slate-900">{formatCurrency(total)}</span>
           </div>
         </Card>
       </div>
 
-      {/* Bottom row */}
-      <div className="grid grid-cols-3 gap-5">
-        <Card>
-          <CardHeader title="Delinquent Accounts"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('dues')}>View →</Button>} />
-          {[{l:'30 days',u:4,a:600,c:'text-amber-600'},{l:'60 days',u:2,a:450,c:'text-amber-800'},{l:'Collections',u:1,a:900,c:'text-rose-600'}].map(b=>(
-            <div key={b.l} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-              <div><p className="text-xs font-medium text-slate-700">{b.l} past due</p><p className="text-[11px] text-slate-400">{b.u} units</p></div>
-              <p className={`text-sm font-semibold ${b.c}`}>{formatCurrency(b.a)}</p>
-            </div>
-          ))}
-          <Button variant="secondary" size="sm" className="w-full justify-center mt-3" onClick={() => onNavigate('dues')}>Send Reminders</Button>
-        </Card>
-
-        <Card>
-          <CardHeader title="Open Violations"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('violations')}>View →</Button>} />
-          {[{t:'Parking',n:3},{t:'Landscaping',n:2},{t:'Noise',n:1},{t:'Modification',n:1}].map(v=>(
-            <div key={v.t} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-              <div className="flex items-center gap-2"><AlertTriangle size={11} className="text-amber-500" /><span className="text-xs text-slate-700">{v.t}</span></div>
-              <Badge variant="amber">{v.n} open</Badge>
-            </div>
-          ))}
-        </Card>
-
-        <Card>
-          <CardHeader title="Maintenance"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('maintenance')}>View →</Button>} />
-          {[{l:'New today',v:'2 requests',c:'text-slate-800'},{l:'In progress',v:'3 open',c:'text-navy-700'},{l:'Pending vendor',v:'2 waiting',c:'text-amber-600'},{l:'Completed (30d)',v:'14 done',c:'text-emerald-600'}].map(m=>(
-            <div key={m.l} className="flex justify-between py-2 border-b border-slate-50 last:border-0">
-              <span className="text-xs text-slate-500">{m.l}</span>
-              <span className={`text-xs font-semibold ${m.c}`}>{m.v}</span>
-            </div>
-          ))}
-          <Alert variant="info" title="SB 900 SLA" className="mt-3">WO-088 gas line — deadline April 29</Alert>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader title="Reserve Fund Health" />
+        <div className="grid grid-cols-3 gap-6">
+          <div>
+            <p className="text-2xl font-display text-slate-900">{formatCurrency(s.reserveBalance)}</p>
+            <p className="text-xs text-amber-600 mt-1 mb-3">{s.reservePct}% funded — below recommended 70%</p>
+            <ProgressBar value={s.reservePct} color="amber" />
+          </div>
+          <div className="text-xs space-y-0">
+            {[['Fully funded target',formatCurrency(302000)],['Monthly contribution',formatCurrency(3835)],['Next reserve study','2027'],['10-year repair forecast',formatCurrency(480000)]].map(([l,v])=>(
+              <div key={l} className="flex justify-between py-2.5 border-b border-slate-50">
+                <span className="text-slate-500">{l}</span>
+                <span className="font-semibold text-slate-800">{v}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+            <p className="text-xs font-semibold text-amber-800 mb-2">Underfunding Risk</p>
+            <p className="text-xs text-amber-700 leading-relaxed">At current rate, fund reaches 70% by Q3 2028. Consider a special assessment if major repairs arise sooner.</p>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

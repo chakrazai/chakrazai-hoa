@@ -1,154 +1,127 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Download, Send, Plus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangle } from 'lucide-react';
-import { MetricCard, Card, CardHeader, Alert, Badge, Button, ProgressBar, StatusDot, LoadingSpinner, ErrorMessage, formatCurrency, formatPct } from '../components/ui';
-import { communityAPI, complianceAPI } from '../lib/api';
+import { MetricCard, Card, CardHeader, Badge, Alert, Button, Table, Th, Td, Tr, Tabs, SectionHeader, formatCurrency } from '../components/ui';
+import { duesAPI } from '../lib/api';
 
-// Fallback mock data for when API isn't connected yet
-const MOCK_METRICS = {
-  totalUnits: 148, collectionRate: 94.6, collectionRateChange: 2.1,
-  monthlyRevenue: 22348, reserveFund: 184200, reserveFundPct: 61,
-};
-const MOCK_FINANCIALS = [
-  { month:'Nov', income:20800, expenses:17200 }, { month:'Dec', income:21000, expenses:19800 },
-  { month:'Jan', income:20200, expenses:16900 }, { month:'Feb', income:21600, expenses:17400 },
-  { month:'Mar', income:21900, expenses:18100 }, { month:'Apr', income:22348, expenses:18205 },
-];
-const MOCK_COMPLIANCE = [
-  { id:'ab130',  law:'AB 130', title:'Fine Schedule Caps',        status:'action_required', detail:'3 fines exceed the new $100/violation cap.' },
-  { id:'sb326',  law:'SB 326', title:'Balcony Inspections',       status:'warning',         detail:'Not yet scheduled. 187 days remaining.' },
-  { id:'ab2159', law:'AB 2159',title:'Electronic Voting',         status:'compliant',        detail:'System configured. Paper backup available.' },
-  { id:'solar',  law:'Solar',  title:'Solar Panel Policy',        status:'compliant',        detail:'Policy adopted March 2025.' },
-  { id:'sb900',  law:'SB 900', title:'Utility Repairs (14-Day)', status:'compliant',        detail:'SLA tracking active.' },
+const MOCK_DELINQUENT = [
+  { id:1, unit:'Unit 33',  owner:'Michael Torres', daysPastDue:92, amount:900, status:'collections' },
+  { id:2, unit:'Unit 67',  owner:'Amanda Liu',     daysPastDue:61, amount:300, status:'escalated'   },
+  { id:3, unit:'Unit 104', owner:'Robert Patel',   daysPastDue:61, amount:150, status:'escalated'   },
+  { id:4, unit:'Unit 12',  owner:'Diana Foster',   daysPastDue:32, amount:150, status:'reminder'    },
+  { id:5, unit:'Unit 55',  owner:'Kevin Zhang',    daysPastDue:32, amount:150, status:'reminder'    },
 ];
 
-export default function Dashboard({ onNavigate }) {
-  const communityId = 1; // TODO: get from store
+const MOCK_PAYMENTS = [
+  { id:1, unit:'Unit 42',  owner:'Sarah Chen',    amount:150, method:'ACH',   date:'Apr 26', status:'cleared'    },
+  { id:2, unit:'Unit 7',   owner:'James Okonkwo', amount:150, method:'Card',  date:'Apr 25', status:'cleared'    },
+  { id:3, unit:'Unit 119', owner:'Maria Garcia',  amount:150, method:'ACH',   date:'Apr 25', status:'processing' },
+  { id:4, unit:'Unit 83',  owner:'Tom Nakamura',  amount:150, method:'Check', date:'Apr 24', status:'cleared'    },
+];
 
-  const { data: metrics, isLoading: metricsLoading, error: metricsError } = useQuery({
-    queryKey: ['dashboard', communityId],
-    queryFn: () => communityAPI.dashboard(communityId).then(r => r.data),
-    // Falls back to mock if API not connected
-    placeholderData: MOCK_METRICS,
-  });
+const MOCK_HISTORY = [
+  { month:'Nov', collected:20800, expected:22200 },
+  { month:'Dec', collected:21000, expected:22200 },
+  { month:'Jan', collected:20200, expected:22200 },
+  { month:'Feb', collected:21600, expected:22200 },
+  { month:'Mar', collected:21900, expected:22200 },
+  { month:'Apr', collected:21150, expected:22200 },
+];
 
-  const { data: compliance } = useQuery({
-    queryKey: ['compliance', 'ca'],
-    queryFn: () => complianceAPI.alerts('ca').then(r => r.data),
-    placeholderData: MOCK_COMPLIANCE,
-  });
+const delinqMap = { collections:'red', escalated:'amber', reminder:'amber', overdue:'gray' };
+const pmtMap    = { cleared:'green', processing:'blue', returned:'red' };
 
-  const { data: financials } = useQuery({
-    queryKey: ['financials', communityId],
-    queryFn: () => communityAPI.dashboard(communityId).then(r => r.data?.monthlyFinancials),
-    placeholderData: MOCK_FINANCIALS,
-  });
+export default function Dues() {
+  const [tab, setTab] = useState('delinquent');
 
-  const m = metrics || MOCK_METRICS;
-  const complianceData = compliance || MOCK_COMPLIANCE;
-  const financialData = financials || MOCK_FINANCIALS;
+  const { data: delinquent } = useQuery({ queryKey:['dues-delinquent'], queryFn:()=>duesAPI.delinquent(1).then(r=>r.data), placeholderData:MOCK_DELINQUENT });
+  const { data: payments }   = useQuery({ queryKey:['dues-payments'],   queryFn:()=>duesAPI.payments(1).then(r=>r.data),   placeholderData:MOCK_PAYMENTS   });
 
-  const urgentAlerts = complianceData.filter(a => a.status === 'action_required' || a.status === 'warning');
-  const passing = complianceData.filter(a => a.status === 'compliant').length;
-
-  if (metricsLoading) return <LoadingSpinner />;
+  const list = delinquent || MOCK_DELINQUENT;
+  const pmts  = payments  || MOCK_PAYMENTS;
+  const total = list.reduce((s,a)=>s+a.amount,0);
 
   return (
     <div className="page-enter">
-      {/* Compliance alerts */}
-      {urgentAlerts.slice(0, 2).map(a => (
-        <Alert key={a.id} variant={a.status === 'action_required' ? 'danger' : 'warning'}
-          title={`${a.law} — ${a.title}`}>
-          {a.detail}{' '}
-          <button onClick={() => onNavigate('compliance')} className="font-medium underline">View compliance →</button>
-        </Alert>
-      ))}
+      <SectionHeader title="Dues & Payments" subtitle="Collections, delinquencies, and payment history"
+        action={<><Button variant="secondary" size="sm"><Download size={12}/>Export</Button><Button variant="primary" size="sm"><Plus size={12}/>Record Payment</Button></>} />
 
-      {/* Metrics */}
+      <Alert variant="warning" title="AB 130 Fine Cap">California fines capped at $100/violation. Ensure compliance before sending new notices.</Alert>
+
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <MetricCard label="Total Units"     value={m.totalUnits}                       sub="Oakwood Estates" />
-        <MetricCard label="Collection Rate" value={formatPct(m.collectionRate)}         sub={`+${m.collectionRateChange}% vs last month`} subVariant="good" />
-        <MetricCard label="Monthly Revenue" value={formatCurrency(m.monthlyRevenue)}    sub="$150/unit average" />
-        <MetricCard label="Reserve Fund"    value={formatCurrency(m.reserveFund)}       sub={`${m.reserveFundPct}% funded`} subVariant="warn" />
+        <MetricCard label="Collected (Apr)" value={formatCurrency(21150)} sub="141 of 148 units" subVariant="good" />
+        <MetricCard label="Total Delinquent" value={formatCurrency(total)} sub={`${list.length} units`} subVariant="bad" />
+        <MetricCard label="In Collections"  value={formatCurrency(900)}   sub="1 unit" subVariant="bad" />
+        <MetricCard label="Collection Rate" value="94.6%"                  sub="+2.1% MoM" subVariant="good" />
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-2 gap-5 mb-5">
+      <Tabs tabs={[{id:'delinquent',label:'Delinquent Accounts',count:list.length},{id:'payments',label:'Recent Payments'},{id:'history',label:'Collection History'}]} activeTab={tab} onChange={setTab} />
+
+      {tab === 'delinquent' && (
+        <Card padding={false}>
+          <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h3 className="text-sm font-semibold text-slate-700">Delinquent Accounts</h3>
+            <Button variant="secondary" size="sm"><Send size={12}/>Send All Reminders</Button>
+          </div>
+          <div className="px-5 py-1">
+            <Table>
+              <thead><tr><Th>Unit</Th><Th>Owner</Th><Th>Days Past Due</Th><Th>Amount</Th><Th>Status</Th><Th>Action</Th></tr></thead>
+              <tbody>{list.map(a => (
+                <Tr key={a.id}>
+                  <Td><span className="font-semibold">{a.unit}</span></Td>
+                  <Td>{a.owner}</Td>
+                  <Td><span className={`font-semibold ${a.daysPastDue>=61?'text-rose-600':'text-amber-600'}`}>{a.daysPastDue} days</span></Td>
+                  <Td><span className={`font-bold ${a.daysPastDue>=61?'text-rose-600':'text-amber-700'}`}>{formatCurrency(a.amount)}</span></Td>
+                  <Td><Badge variant={delinqMap[a.status]||'gray'}>{a.status==='collections'?'Collections':a.status==='escalated'?'Escalated':'Reminder Due'}</Badge></Td>
+                  <Td><div className="flex gap-2"><Button variant="ghost" size="sm">Notice</Button>{a.status==='escalated'&&<Button variant="danger" size="sm">Collections</Button>}</div></Td>
+                </Tr>
+              ))}</tbody>
+            </Table>
+          </div>
+          <div className="px-5 py-3 border-t border-slate-100 flex justify-between items-center">
+            <p className="text-xs text-slate-400">Total delinquent: <span className="font-semibold text-rose-600">{formatCurrency(total)}</span></p>
+            <Button variant="primary" size="sm">Draft Collection Letter</Button>
+          </div>
+        </Card>
+      )}
+
+      {tab === 'payments' && (
+        <Card padding={false}>
+          <div className="px-5 py-4 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-700">Recent Payments</h3></div>
+          <div className="px-5 py-1">
+            <Table>
+              <thead><tr><Th>Unit</Th><Th>Owner</Th><Th>Amount</Th><Th>Method</Th><Th>Date</Th><Th>Status</Th></tr></thead>
+              <tbody>{pmts.map(p => (
+                <Tr key={p.id}>
+                  <Td><span className="font-semibold">{p.unit}</span></Td>
+                  <Td>{p.owner}</Td>
+                  <Td><span className="font-bold text-emerald-700">{formatCurrency(p.amount)}</span></Td>
+                  <Td>{p.method}</Td>
+                  <Td className="text-slate-400">{p.date}</Td>
+                  <Td><Badge variant={pmtMap[p.status]||'gray'}>{p.status==='cleared'?'Cleared':p.status==='processing'?'Processing':'Returned'}</Badge></Td>
+                </Tr>
+              ))}</tbody>
+            </Table>
+          </div>
+        </Card>
+      )}
+
+      {tab === 'history' && (
         <Card>
-          <CardHeader title="Revenue vs. Expenses (6 mo)"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('accounting')}>Full report →</Button>} />
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={financialData} margin={{ top:0, right:0, left:-22, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f4f5f7" />
-              <XAxis dataKey="month" tick={{ fontSize:10, fill:'#737f96' }} />
-              <YAxis tick={{ fontSize:9, fill:'#737f96' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={v => formatCurrency(v)} contentStyle={{ fontSize:11, borderRadius:8 }} />
-              <Bar dataKey="income"   fill="#1e3a7a" radius={[3,3,0,0]} name="Income" />
-              <Bar dataKey="expenses" fill="#e2e5ec" radius={[3,3,0,0]} name="Expenses" />
+          <CardHeader title="Monthly Collection History" />
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={MOCK_HISTORY} margin={{top:4,right:0,left:-15,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f4f5f7"/>
+              <XAxis dataKey="month" tick={{fontSize:11,fill:'#737f96'}}/>
+              <YAxis tick={{fontSize:9,fill:'#737f96'}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+              <Tooltip formatter={v=>formatCurrency(v)} contentStyle={{fontSize:11,borderRadius:8}}/>
+              <Bar dataKey="expected"  fill="#e2e5ec" radius={[3,3,0,0]} name="Expected"/>
+              <Bar dataKey="collected" fill="#1e3a7a" radius={[3,3,0,0]} name="Collected"/>
             </BarChart>
           </ResponsiveContainer>
         </Card>
-
-        <Card>
-          <CardHeader title="Compliance — California"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('compliance')}>View all →</Button>} />
-          {complianceData.map(a => (
-            <div key={a.id} className="flex items-start gap-3 py-2 border-b border-slate-50 last:border-0">
-              <StatusDot status={a.status === 'action_required' ? 'red' : a.status === 'warning' ? 'amber' : 'green'} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-700">{a.law} — {a.title}</p>
-                <p className="text-[11px] text-slate-400 truncate">{a.detail}</p>
-              </div>
-            </div>
-          ))}
-          <div className="mt-3 pt-2 border-t border-slate-100">
-            <div className="flex justify-between text-xs mb-1.5">
-              <span className="text-slate-500">Overall compliance</span>
-              <span className="font-medium text-slate-700">{passing}/{complianceData.length} passing</span>
-            </div>
-            <ProgressBar value={passing} max={complianceData.length}
-              color={passing/complianceData.length >= 0.8 ? 'emerald' : 'amber'} />
-          </div>
-        </Card>
-      </div>
-
-      {/* Bottom row */}
-      <div className="grid grid-cols-3 gap-5">
-        <Card>
-          <CardHeader title="Delinquent Accounts"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('dues')}>View →</Button>} />
-          {[{l:'30 days',u:4,a:600,c:'text-amber-600'},{l:'60 days',u:2,a:450,c:'text-amber-800'},{l:'Collections',u:1,a:900,c:'text-rose-600'}].map(b=>(
-            <div key={b.l} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-              <div><p className="text-xs font-medium text-slate-700">{b.l} past due</p><p className="text-[11px] text-slate-400">{b.u} units</p></div>
-              <p className={`text-sm font-semibold ${b.c}`}>{formatCurrency(b.a)}</p>
-            </div>
-          ))}
-          <Button variant="secondary" size="sm" className="w-full justify-center mt-3" onClick={() => onNavigate('dues')}>Send Reminders</Button>
-        </Card>
-
-        <Card>
-          <CardHeader title="Open Violations"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('violations')}>View →</Button>} />
-          {[{t:'Parking',n:3},{t:'Landscaping',n:2},{t:'Noise',n:1},{t:'Modification',n:1}].map(v=>(
-            <div key={v.t} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-              <div className="flex items-center gap-2"><AlertTriangle size={11} className="text-amber-500" /><span className="text-xs text-slate-700">{v.t}</span></div>
-              <Badge variant="amber">{v.n} open</Badge>
-            </div>
-          ))}
-        </Card>
-
-        <Card>
-          <CardHeader title="Maintenance"
-            action={<Button variant="ghost" size="sm" onClick={() => onNavigate('maintenance')}>View →</Button>} />
-          {[{l:'New today',v:'2 requests',c:'text-slate-800'},{l:'In progress',v:'3 open',c:'text-navy-700'},{l:'Pending vendor',v:'2 waiting',c:'text-amber-600'},{l:'Completed (30d)',v:'14 done',c:'text-emerald-600'}].map(m=>(
-            <div key={m.l} className="flex justify-between py-2 border-b border-slate-50 last:border-0">
-              <span className="text-xs text-slate-500">{m.l}</span>
-              <span className={`text-xs font-semibold ${m.c}`}>{m.v}</span>
-            </div>
-          ))}
-          <Alert variant="info" title="SB 900 SLA" className="mt-3">WO-088 gas line — deadline April 29</Alert>
-        </Card>
-      </div>
+      )}
     </div>
   );
 }

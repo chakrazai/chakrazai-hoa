@@ -1,11 +1,4 @@
 export { default as Compliance } from './Compliance.jsx';
 export { default as Dues } from './Dues.jsx';
 export { default as Accounting } from './Accounting.jsx';
-export { default as Tax } from './Tax.jsx';
-export { default as Violations } from './Violations.jsx';
-export { default as Maintenance } from './Maintenance.jsx';
-export { default as Vendors } from './Vendors.jsx';
-export { default as Residents } from './Residents.jsx';
-export { default as Documents } from './Documents.jsx';
-export { default as Communications } from './Communications.jsx';
-export { default as Communities } from './Communities.jsx';
+export { Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities } from './OtherPages.jsx';
