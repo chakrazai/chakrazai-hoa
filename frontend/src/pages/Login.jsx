@@ -24,7 +24,7 @@ export default function Login() {
             <Building2 size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">HOAConnect</h1>
+            <h1 className="text-lg font-semibold text-slate-900">ChakrazAI HOA</h1>
             <p className="text-xs text-slate-500">Management Platform</p>
           </div>
         </div>

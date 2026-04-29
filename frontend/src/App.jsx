@@ -53,7 +53,7 @@ function AppLayout() {
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Topbar */}
         <header className="h-13 bg-white border-b border-slate-100 flex items-center justify-between px-6 flex-shrink-0" style={{ height: 50 }}>
-          <h1 className="text-sm font-semibold text-slate-800">{pageTitles[page] || 'HOAConnect'}</h1>
+          <h1 className="text-sm font-semibold text-slate-800">{pageTitles[page] || 'ChakrazAI HOA'}</h1>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
