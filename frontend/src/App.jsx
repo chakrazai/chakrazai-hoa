@@ -10,6 +10,7 @@ import { useAuthStore } from './hooks/useStore';
 import Dashboard from './pages/Dashboard';
 
 import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities } from './pages/index.jsx';
+import Map from './pages/Map.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -20,6 +21,7 @@ const pageTitles = {
   accounting: 'Accounting', tax: 'Tax Reports', violations: 'Violations',
   maintenance: 'Maintenance', vendors: 'Vendors', residents: 'Residents',
   documents: 'Documents', communications: 'Communications', communities: 'Communities',
+  map: 'Community Map',
 };
 
 function AppLayout() {
@@ -45,6 +47,7 @@ function AppLayout() {
     documents:      <Documents />,
     communications: <Communications />,
     communities:    <Communities onNavigate={setPage} />,
+    map:            <Map />,
   };
 
   return (
@@ -70,10 +73,11 @@ function AppLayout() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-6 py-6">
-            {pages[page] || pages.dashboard}
-          </div>
+        <main className="flex-1 overflow-hidden flex flex-col">
+          {page === 'map'
+            ? <div className="flex-1 overflow-hidden">{pages.map}</div>
+            : <div className="flex-1 overflow-y-auto"><div className="max-w-7xl mx-auto px-6 py-6">{pages[page] || pages.dashboard}</div></div>
+          }
         </main>
       </div>
     </div>
