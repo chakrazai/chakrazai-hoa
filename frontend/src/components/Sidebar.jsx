@@ -45,7 +45,7 @@ export default function Sidebar({ currentPage, onNavigate, community }) {
             <Building2 size={14} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-900 leading-none">HOAConnect</p>
+            <p className="text-sm font-semibold text-slate-900 leading-none">ChakrazAI HOA</p>
             <p className="text-[10px] text-slate-400 mt-0.5">Management Platform</p>
           </div>
         </div>

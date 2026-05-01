@@ -1,4 +1,4 @@
-# HOAConnect — Full Stack Application
+# ChakrazAI HOA — Full Stack Application
 
 A production-ready HOA management platform with React frontend, Node.js/Express backend, and PostgreSQL database.
 
@@ -178,7 +178,7 @@ Or connect your GitHub repo to Vercel — it auto-deploys on every push to `main
 # Initialize git
 git init
 git add .
-git commit -m "Initial commit — HOAConnect full stack"
+git commit -m "Initial commit — ChakrazAI HOA full stack"
 
 # Push to GitHub
 git remote add origin https://github.com/YOUR_USERNAME/hoa-platform.git

@@ -1,4 +1,4 @@
-# HOAConnect — Step-by-Step Setup Guide
+# ChakrazAI HOA — Step-by-Step Setup Guide
 
 ## Step 1: Put the code on GitHub
 
@@ -8,7 +8,7 @@ cd hoa-fullstack
 
 git init
 git add .
-git commit -m "Initial commit — HOAConnect full stack"
+git commit -m "Initial commit — ChakrazAI HOA full stack"
 ```
 
 Then:
