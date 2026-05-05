@@ -3,7 +3,7 @@ import {
   Users, Vote, CalendarDays, Plus, X, Check, Edit2, Trash2,
   ChevronRight, Phone, Mail, Clock, MapPin, FileText,
   CheckCircle, XCircle, AlertCircle, Activity, Shield,
-  Search, BarChart2, User,
+  Search, BarChart2, User, Printer, Award, ClipboardList,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
@@ -332,6 +332,8 @@ const SEED_ELECTIONS = [
   {
     id: 1, title: 'Board of Directors Election 2024', type: 'Board', status: 'closed',
     startDate: 'Nov 1, 2023', endDate: 'Nov 30, 2023', totalEligible: 148, votesCast: 112,
+    seatsAvailable: 3, votingMethod: 'Mail-in & Online', certified: true,
+    ballotInstructions: 'Vote for up to 3 candidates. Mark the oval completely next to your choice(s). Ballots with more than 3 selections will be voided. Return by November 30, 2023.',
     description: 'Annual election for 3 open board seats. Candidates submitted their bios in October.',
     candidates: [
       { id: 1, name: 'Jane Ramirez',   bio: 'Incumbent president seeking second term.', votes: 98, elected: true },
@@ -350,6 +352,8 @@ const SEED_ELECTIONS = [
   {
     id: 2, title: 'Bylaw Amendment Vote 2024', type: 'Bylaw', status: 'closed',
     startDate: 'Mar 1, 2024', endDate: 'Mar 15, 2024', totalEligible: 148, votesCast: 89,
+    seatsAvailable: 1, votingMethod: 'Mail-in', certified: true,
+    ballotInstructions: 'Vote YES or NO on the proposed bylaw amendment. A two-thirds supermajority of votes cast is required for passage. Return your ballot by March 15, 2024.',
     description: 'Proposed amendment to Section 4.2 — Rental Restrictions. Maximum rental period changed from 30 to 90 days.',
     candidates: [
       { id: 1, name: 'Yes — Approve Amendment', bio: '', votes: 61, elected: true },
@@ -364,6 +368,8 @@ const SEED_ELECTIONS = [
   {
     id: 3, title: 'Board of Directors Election 2026', type: 'Board', status: 'upcoming',
     startDate: 'Nov 1, 2026', endDate: 'Nov 30, 2026', totalEligible: 148, votesCast: 0,
+    seatsAvailable: 3, votingMethod: 'Mail-in & Online', certified: false,
+    ballotInstructions: 'Vote for up to 3 candidates. Mark the oval completely next to your choice(s). Ballots with more than 3 selections will be voided.',
     description: 'Upcoming election for 3 board seats. Nominations open September 1 – October 15.',
     candidates: [],
     activityLog: [
@@ -378,12 +384,271 @@ const electionStatusMap = {
   closed:   { l: 'Closed',   c: 'gray' },
 };
 
+function BallotView({ election, onUpdate }) {
+  const [editingInstr, setEditingInstr] = useState(false);
+  const [instrDraft, setInstrDraft] = useState(election.ballotInstructions || '');
+  const maxVotes = election.seatsAvailable || 1;
+
+  const handlePrint = () => {
+    const content = document.getElementById('ballot-preview-inner');
+    if (!content) return;
+    const w = window.open('', '_blank', 'width=700,height=900');
+    w.document.write(`<!DOCTYPE html><html><head><title>${election.title} — Official Ballot</title>
+      <style>
+        body{font-family:Georgia,serif;max-width:580px;margin:40px auto;padding:20px;color:#1e293b}
+        .ballot-header{background:#1e293b;color:white;padding:20px 24px;text-align:center;border-radius:4px 4px 0 0}
+        .ballot-header .super{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#94a3b8}
+        .ballot-header h1{font-size:13px;font-weight:700;margin:4px 0}
+        .ballot-header h2{font-size:17px;font-weight:900;margin:2px 0}
+        .ballot-header .dates{font-size:10px;color:#94a3b8;margin-top:4px}
+        .instructions{background:#fffbeb;border-bottom:2px solid #f59e0b;padding:12px 24px}
+        .instructions .label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#92400e}
+        .instructions p{font-size:11px;color:#78350f;margin:4px 0 0;line-height:1.5}
+        .body{padding:20px 24px;border:2px solid #1e293b;border-top:none}
+        .section-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:16px}
+        .candidate{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px dotted #cbd5e1}
+        .bubble{width:20px;height:20px;border-radius:50%;border:2px solid #1e293b;flex-shrink:0;margin-top:2px;background:white}
+        .cand-name{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+        .cand-bio{font-size:10px;color:#64748b;font-style:italic;margin-top:3px}
+        .writein .bubble{border-color:#94a3b8}
+        .writein .label{font-size:11px;color:#94a3b8;font-style:italic}
+        .footer{background:#f8fafc;border-top:2px solid #e2e8f0;border:2px solid #1e293b;border-top:none;border-radius:0 0 4px 4px;padding:12px 24px}
+        .dashed{border-top:2px dashed #94a3b8;padding-top:10px;text-align:center}
+        .dashed .official{font-size:8px;text-transform:uppercase;letter-spacing:2px;color:#94a3b8}
+        .dashed .fields{display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:#94a3b8}
+        .dashed .sig{font-size:10px;color:#94a3b8;margin-top:6px}
+        @media print{body{margin:0}}
+      </style></head><body>${content.innerHTML}</body></html>`);
+    w.document.close();
+    w.print();
+  };
+
+  const saveInstr = () => { onUpdate({ ballotInstructions: instrDraft }); setEditingInstr(false); };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mt-1">
+        <SectionLabel>Official Ballot Preview</SectionLabel>
+        <div className="flex items-center gap-3 mb-[-4px]">
+          {election.status !== 'closed' && (
+            <button onClick={() => { setInstrDraft(election.ballotInstructions || ''); setEditingInstr(v => !v); }}
+              className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1">
+              <Edit2 size={11}/>{editingInstr ? 'Cancel' : 'Edit Instructions'}
+            </button>
+          )}
+          <button onClick={handlePrint}
+            className="text-xs text-slate-600 hover:text-slate-800 font-medium flex items-center gap-1 px-2 py-1 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
+            <Printer size={11}/>Print Ballot
+          </button>
+        </div>
+      </div>
+
+      {editingInstr && (
+        <div className="mb-3 p-3 bg-slate-50 rounded-xl space-y-2">
+          <label className={fLabel}>Voting Instructions (printed on ballot)</label>
+          <textarea value={instrDraft} onChange={e => setInstrDraft(e.target.value)} rows={3} className={iCls}/>
+          <div className="flex gap-2">
+            <Button variant="primary" size="sm" onClick={saveInstr}><Check size={11}/>Save</Button>
+            <Button variant="ghost" size="sm" onClick={() => setEditingInstr(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      <div id="ballot-preview-inner" className="border-2 border-slate-700 rounded-xl overflow-hidden bg-white shadow-sm">
+        {/* Header */}
+        <div className="bg-slate-800 text-white px-6 py-4 text-center">
+          <p className="text-[9px] font-bold tracking-[0.25em] uppercase text-slate-400">Official Ballot</p>
+          <p className="text-xs font-bold mt-1 text-slate-200">Oakwood Estates Homeowners Association</p>
+          <p className="text-sm font-black mt-0.5">{election.title}</p>
+          <p className="text-[10px] text-slate-400 mt-1">Voting Period: {election.startDate} – {election.endDate}</p>
+        </div>
+
+        {/* Instructions */}
+        <div className="px-5 py-3 bg-amber-50 border-b-2 border-amber-300">
+          <p className="text-[9px] font-black text-amber-900 uppercase tracking-[0.2em]">Voting Instructions</p>
+          <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+            {election.ballotInstructions || `Vote for up to ${maxVotes} candidate${maxVotes > 1 ? 's' : ''}. Mark the oval completely next to your choice.`}
+          </p>
+        </div>
+
+        {/* Ballot body */}
+        <div className="px-5 py-4">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-2 mb-4">
+            {election.type === 'Board'
+              ? `Board of Directors — Vote for up to ${maxVotes} Candidate${maxVotes > 1 ? 's' : ''}`
+              : election.type === 'Bylaw'
+              ? 'Ballot Measure — Vote Yes or No'
+              : `${election.type} — ${maxVotes > 1 ? `Vote for up to ${maxVotes}` : 'Vote for one'}`}
+          </p>
+
+          {election.candidates.length === 0
+            ? <p className="text-sm text-slate-400 italic text-center py-6">No candidates added yet — add candidates in the Candidates tab</p>
+            : (
+              <div className="space-y-3">
+                {election.candidates.map(c => (
+                  <div key={c.id} className="flex items-start gap-4">
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-700 flex-shrink-0 mt-0.5 bg-white" />
+                    <div className="flex-1 border-b border-dotted border-slate-200 pb-3">
+                      <p className="text-xs font-black text-slate-900 uppercase tracking-wide">{c.name}</p>
+                      {c.bio && <p className="text-[11px] text-slate-500 mt-0.5 italic">{c.bio}</p>}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-start gap-4">
+                  <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex-shrink-0 mt-0.5 bg-white" />
+                  <div className="flex-1 border-b border-dotted border-slate-200 pb-3">
+                    <p className="text-[11px] text-slate-400 italic">Write-in candidate: _________________________________</p>
+                  </div>
+                </div>
+              </div>
+            )
+          }
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 bg-slate-50 border-t-2 border-slate-200">
+          <div className="border-t-2 border-dashed border-slate-300 pt-3 text-center">
+            <p className="text-[8px] text-slate-400 uppercase tracking-[0.2em]">— Do not mark below this line — Official use only —</p>
+            <div className="flex justify-between mt-2 text-[10px] text-slate-400">
+              <span>Ballot #: ___________</span>
+              <span>Unit #: ___________</span>
+              <span>Received: ___________</span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1.5">Voter Signature: _________________________________ Date: ___________</p>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-slate-400 mt-2 text-center">
+        Voting method: <span className="font-medium">{election.votingMethod || 'Not specified'}</span> · {election.totalEligible} eligible voters
+      </p>
+    </div>
+  );
+}
+
+function ResultsEntry({ election, onUpdate }) {
+  const [votes, setVotes] = useState(() =>
+    Object.fromEntries(election.candidates.map(c => [c.id, c.votes || 0]))
+  );
+  const [totalCast, setTotalCast] = useState(election.votesCast || 0);
+  const [saved, setSaved] = useState(false);
+
+  const totalEntered = Object.values(votes).reduce((s, v) => s + Number(v || 0), 0);
+  const seats = election.seatsAvailable || 1;
+
+  const saveDraft = () => {
+    const updated = election.candidates.map(c => ({ ...c, votes: Number(votes[c.id] || 0) }));
+    onUpdate({ candidates: updated, votesCast: Number(totalCast) });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const certify = () => {
+    const sorted = [...election.candidates]
+      .map(c => ({ ...c, votes: Number(votes[c.id] || 0) }))
+      .sort((a, b) => b.votes - a.votes);
+    const electedIds = new Set(sorted.slice(0, seats).map(c => c.id));
+    const updated = election.candidates.map(c => ({
+      ...c, votes: Number(votes[c.id] || 0), elected: electedIds.has(c.id),
+    }));
+    onUpdate({ candidates: updated, votesCast: Number(totalCast), status: 'closed', certified: true });
+  };
+
+  const sorted = [...election.candidates].sort(
+    (a, b) => Number(votes[b.id] || 0) - Number(votes[a.id] || 0)
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mt-1">
+        <SectionLabel>Enter Vote Tallies</SectionLabel>
+        {election.certified && <Badge variant="green"><CheckCircle size={10}/>Certified</Badge>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="p-3 bg-slate-50 rounded-xl">
+          <label className={fLabel}>Total Ballots Cast</label>
+          <input type="number" value={totalCast} onChange={e => setTotalCast(e.target.value)}
+            className={iCls + ' mt-1'} min="0" max={election.totalEligible} disabled={election.certified}/>
+        </div>
+        <div className="p-3 bg-slate-50 rounded-xl">
+          <p className={fLabel}>Turnout</p>
+          <p className="text-xl font-bold text-slate-900 mt-1">
+            {election.totalEligible ? `${Math.round(Number(totalCast) / election.totalEligible * 100)}%` : '—'}
+          </p>
+          <p className="text-[11px] text-slate-400">{totalCast} of {election.totalEligible} eligible</p>
+        </div>
+      </div>
+
+      {election.candidates.length === 0
+        ? <p className="text-sm text-slate-400 italic mb-4">Add candidates in the Candidates tab before entering results.</p>
+        : (
+          <div className="space-y-2 mb-4">
+            {sorted.map((c, rank) => {
+              const v = Number(votes[c.id] || 0);
+              const pct = totalEntered > 0 ? Math.round(v / totalEntered * 100) : 0;
+              const willBeElected = rank < seats;
+              return (
+                <div key={c.id} className={clsx('p-3 border rounded-xl transition-colors',
+                  election.certified && c.elected ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100')}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-bold text-slate-400 w-4">#{rank + 1}</span>
+                      <span className="text-sm font-semibold text-slate-800 truncate">{c.name}</span>
+                      {election.certified && c.elected && <Badge variant="green"><Award size={9}/>Elected</Badge>}
+                      {!election.certified && totalEntered > 0 && willBeElected && <Badge variant="blue">On track</Badge>}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
+                      <input type="number" value={votes[c.id] ?? ''} min="0"
+                        onChange={e => setVotes(p => ({ ...p, [c.id]: e.target.value }))}
+                        disabled={election.certified}
+                        className="w-20 px-2 py-1 text-sm text-center bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400 disabled:bg-slate-50 disabled:text-slate-400"
+                        placeholder="0"/>
+                    </div>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <div className={clsx('h-1.5 rounded-full transition-all', election.certified && c.elected ? 'bg-emerald-500' : 'bg-navy-600')}
+                      style={{ width: `${pct}%` }}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      }
+
+      {!election.certified && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="secondary" onClick={saveDraft}>
+            {saved ? <><Check size={12}/>Saved!</> : 'Save Draft Results'}
+          </Button>
+          <Button variant="primary" onClick={certify} disabled={election.candidates.length === 0}>
+            <Award size={12}/>Certify & Close Election
+          </Button>
+        </div>
+      )}
+      {!election.certified && election.candidates.length > 0 && (
+        <p className="text-xs text-slate-400 mt-2">
+          Certifying will mark the top {seats} vote-getter{seats > 1 ? 's' : ''} as elected and close the election.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ElectionDetail({ election, onUpdate, onClose }) {
   const [tab, setTab] = useState('overview');
   const [showCandForm, setShowCandForm] = useState(false);
   const [candDraft, setCandDraft] = useState({ name:'', bio:'' });
 
-  const tabs = [{ id:'overview', label:'Overview' }, { id:'candidates', label:'Candidates' }, { id:'activity', label:'Activity Log' }];
+  const tabs = [
+    { id:'overview',    label:'Overview' },
+    { id:'ballot',      label:'Ballot' },
+    { id:'candidates',  label:'Candidates' },
+    { id:'results',     label:'Results' },
+    { id:'activity',    label:'Activity Log' },
+  ];
   const totalVotes = election.candidates.reduce((s, c) => s + c.votes, 0);
   const st = electionStatusMap[election.status] || { l: election.status, c: 'gray' };
 
@@ -410,7 +675,20 @@ function ElectionDetail({ election, onUpdate, onClose }) {
         {tab === 'overview' && (
           <div>
             <SectionLabel>Description</SectionLabel>
-            <p className="text-sm text-slate-600 leading-relaxed mb-4">{election.description}</p>
+            <p className="text-sm text-slate-600 leading-relaxed mb-2">{election.description}</p>
+            <div className="grid grid-cols-2 gap-2 mb-4 mt-3">
+              {[
+                { label:'Voting Method',   value: election.votingMethod || '—' },
+                { label:'Seats Available', value: election.seatsAvailable ?? '—' },
+                { label:'Ballot Status',   value: election.certified ? 'Certified' : election.status === 'closed' ? 'Closed' : 'Open' },
+                { label:'Candidates',      value: election.candidates.length },
+              ].map(({label,value}) => (
+                <div key={label} className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">{label}</p>
+                  <p className="text-sm font-semibold text-slate-800 mt-0.5">{value}</p>
+                </div>
+              ))}
+            </div>
             <SectionLabel>Turnout</SectionLabel>
             <div className="grid grid-cols-3 gap-3 mb-2">
               {[
@@ -424,8 +702,30 @@ function ElectionDetail({ election, onUpdate, onClose }) {
                 </div>
               ))}
             </div>
+            {election.status === 'closed' && election.candidates.length > 0 && (
+              <>
+                <SectionLabel>Final Results</SectionLabel>
+                <div className="space-y-2">
+                  {[...election.candidates].sort((a,b)=>b.votes-a.votes).map((c,i) => {
+                    const tot = election.candidates.reduce((s,x)=>s+x.votes,0);
+                    const pct = tot > 0 ? Math.round(c.votes/tot*100) : 0;
+                    return (
+                      <div key={c.id} className={clsx('flex items-center gap-3 p-2.5 rounded-xl', c.elected ? 'bg-emerald-50 border border-emerald-100' : 'bg-slate-50')}>
+                        <span className="text-xs font-bold text-slate-400 w-4">#{i+1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5"><span className="text-xs font-semibold text-slate-800">{c.name}</span>{c.elected&&<Badge variant="green"><Award size={9}/>Elected</Badge>}</div>
+                          <div className="flex items-center gap-2 mt-1"><div className="flex-1 bg-slate-200 rounded-full h-1"><div className={clsx('h-1 rounded-full',c.elected?'bg-emerald-500':'bg-navy-500')} style={{width:`${pct}%`}}/></div><span className="text-[11px] text-slate-500 flex-shrink-0">{c.votes} ({pct}%)</span></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
+        {tab === 'ballot' && <BallotView election={election} onUpdate={onUpdate}/>}
+        {tab === 'results' && <ResultsEntry election={election} onUpdate={onUpdate}/>}
         {tab === 'candidates' && (
           <div>
             <div className="flex items-center justify-between mt-1">
@@ -480,7 +780,7 @@ export function ElectionsPage() {
   const [elections, setElections] = useState(SEED_ELECTIONS);
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, candidates:[], activityLog:[] });
+  const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
 
   const update = (id, patch) => {
     setElections(p => p.map(e => e.id === id ? { ...e, ...patch } : e));
@@ -492,7 +792,7 @@ export function ElectionsPage() {
     setElections(p => [...p, e]);
     setSelected(e);
     setShowAdd(false);
-    setForm({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, candidates:[], activityLog:[] });
+    setForm({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
   };
 
   const statusCounts = { upcoming: elections.filter(e=>e.status==='upcoming').length, active: elections.filter(e=>e.status==='active').length, closed: elections.filter(e=>e.status==='closed').length };
@@ -517,7 +817,16 @@ export function ElectionsPage() {
                 <div><label className={fLabel}>End Date</label><input value={form.endDate} onChange={e=>setForm(p=>({...p,endDate:e.target.value}))} placeholder="Nov 30, 2026" className={iCls}/></div>
               </div>
               <div><label className={fLabel}>Description</label><textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={3} className={iCls}/></div>
-              <div><label className={fLabel}>Eligible Voters</label><input type="number" value={form.totalEligible} onChange={e=>setForm(p=>({...p,totalEligible:Number(e.target.value)}))} className={iCls}/></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={fLabel}>Eligible Voters</label><input type="number" value={form.totalEligible} onChange={e=>setForm(p=>({...p,totalEligible:Number(e.target.value)}))} className={iCls}/></div>
+                <div><label className={fLabel}>Seats Available</label><input type="number" value={form.seatsAvailable} onChange={e=>setForm(p=>({...p,seatsAvailable:Number(e.target.value)}))} min="1" className={iCls}/></div>
+              </div>
+              <div><label className={fLabel}>Voting Method</label>
+                <select value={form.votingMethod} onChange={e=>setForm(p=>({...p,votingMethod:e.target.value}))} className={selCls}>
+                  {['Mail-in & Online','Mail-in Only','Online Only','In-Person','Hybrid'].map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+              <div><label className={fLabel}>Ballot Instructions</label><textarea value={form.ballotInstructions} onChange={e=>setForm(p=>({...p,ballotInstructions:e.target.value}))} rows={2} placeholder={`Vote for up to ${form.seatsAvailable} candidate${form.seatsAvailable>1?'s':''}...`} className={iCls}/></div>
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
               <Button variant="secondary" onClick={()=>setShowAdd(false)}>Cancel</Button>
