@@ -2,7 +2,7 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Shield, CreditCard, BarChart2, Receipt,
   AlertTriangle, Wrench, Users, FolderOpen, MessageSquare,
-  Building2, ChevronDown, LogOut, Map
+  Building2, ChevronDown, LogOut, Map, Layers,
 } from 'lucide-react';
 import { useAuthStore } from '../hooks/useStore';
 
@@ -26,6 +26,9 @@ const navGroups = [
     { id: 'documents',    Icon: FolderOpen,       label: 'Documents' },
     { id: 'communications', Icon: MessageSquare,  label: 'Communications' },
     { id: 'map',          Icon: Map,              label: 'Map' },
+  ]},
+  { label: 'Property', items: [
+    { id: 'building',     Icon: Layers,           label: 'Building Maps' },
   ]},
 ];
 

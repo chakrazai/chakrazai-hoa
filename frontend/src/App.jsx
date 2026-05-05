@@ -9,7 +9,7 @@ import { useAuthStore } from './hooks/useStore';
 // Lazy page imports
 import Dashboard from './pages/Dashboard';
 
-import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities } from './pages/index.jsx';
+import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities, BuildingPage } from './pages/index.jsx';
 import Map from './pages/Map.jsx';
 
 const queryClient = new QueryClient({
@@ -21,7 +21,7 @@ const pageTitles = {
   accounting: 'Accounting', tax: 'Tax Reports', violations: 'Violations',
   maintenance: 'Maintenance', vendors: 'Vendors', residents: 'Residents',
   documents: 'Documents', communications: 'Communications', communities: 'Communities',
-  map: 'Community Map',
+  map: 'Community Map', building: 'Building Maps',
 };
 
 function AppLayout() {
@@ -48,6 +48,7 @@ function AppLayout() {
     communications: <Communications />,
     communities:    <Communities onNavigate={setPage} />,
     map:            <Map />,
+    building:       <BuildingPage />,
   };
 
   return (

@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
   AlertTriangle, Users, ChevronRight, Home, Shield,
-  LogIn, LogOut, Edit2, Check, Trash2,
+  LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText,
 } from 'lucide-react';
+import { getResidentFloor } from './BuildingPage';
 import { clsx } from 'clsx';
 import {
   Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr,
@@ -1006,6 +1007,129 @@ function HouseholdTab({ r, onUpdate }) {
   );
 }
 
+// ─── Tab: Floor Map ───────────────────────────────────────────────────────────
+
+function FloorMapTab({ r }) {
+  const [viewing, setViewing] = useState(false);
+  const info = getResidentFloor(r.unit);
+
+  const svgMap = {
+    ground:    () => import('./BuildingPage').then(m => m),
+    standard:  () => import('./BuildingPage').then(m => m),
+  };
+
+  // Inline mini SVG previewer for the resident's floor
+  function MiniBlueprint() {
+    if (info.svgType === 'ground') {
+      return (
+        <svg viewBox="0 0 560 370" className="w-full h-full">
+          <rect width="560" height="370" fill="#050e1a" />
+          <rect x={10} y={10} width={540} height={335} fill="none" stroke="#3b82f6" strokeWidth="2" />
+          <rect x={10} y={10} width={200} height={100} fill="#071825" stroke="#7dd3fc" strokeWidth="1.2" />
+          <text x={110} y={65} textAnchor="middle" fill="#93c5fd" fontSize="14" fontFamily="monospace" fontWeight="bold">LOBBY</text>
+          <rect x={10} y={140} width={255} height={85} fill="#102a47" stroke="#38bdf8" strokeWidth="2" />
+          <text x={132} y={186} textAnchor="middle" fill="#7dd3fc" fontSize="13" fontFamily="monospace" fontWeight="bold">UNIT G-1 ★</text>
+          <rect x={375} y={140} width={175} height={85} fill="#071825" stroke="#7dd3fc" strokeWidth="1.2" />
+          <text x={462} y={186} textAnchor="middle" fill="#93c5fd" fontSize="12" fontFamily="monospace">UNIT G-2</text>
+          <rect x={265} y={140} width={55} height={85} fill="#040c16" stroke="#1e40af" strokeWidth="1" />
+          <text x={292} y={183} textAnchor="middle" fill="#2563eb" fontSize="9" fontFamily="monospace">ELEV</text>
+          <rect x={10} y={225} width={540} height={100} fill="#04090f" stroke="#1e40af" strokeWidth="1" />
+          <text x={280} y={280} textAnchor="middle" fill="#3b82f6" fontSize="13" fontFamily="monospace">PARKING GARAGE</text>
+          <rect x={10} y={345} width={540} height={16} fill="#071120" stroke="#1e3a5c" strokeWidth="0.5" />
+          <text x={280} y={356} textAnchor="middle" fill="#3d6a8a" fontSize="7" fontFamily="monospace">OAKWOOD ESTATES HOA · GROUND FLOOR · DWG-A1.0 · REV D</text>
+        </svg>
+      );
+    }
+    const f = info.floorNum;
+    return (
+      <svg viewBox="0 0 560 370" className="w-full h-full">
+        <rect width="560" height="370" fill="#050e1a" />
+        <rect x={10} y={10} width={540} height={335} fill="none" stroke="#3b82f6" strokeWidth="2" />
+        <rect x={10} y={10} width={230} height={155} fill="#102a47" stroke="#38bdf8" strokeWidth="2" />
+        <text x={125} y={90} textAnchor="middle" fill="#7dd3fc" fontSize="13" fontFamily="monospace" fontWeight="bold">UNIT {f}A ★</text>
+        <rect x={320} y={10} width={230} height={155} fill="#071825" stroke="#7dd3fc" strokeWidth="1.2" />
+        <text x={435} y={90} textAnchor="middle" fill="#93c5fd" fontSize="12" fontFamily="monospace">UNIT {f}B</text>
+        <rect x={240} y={10} width={80} height={335} fill="#040c16" stroke="#1e40af" strokeWidth="1.2" />
+        <text x={280} y={185} textAnchor="middle" fill="#2563eb" fontSize="9" fontFamily="monospace">CORE</text>
+        <rect x={10} y={190} width={230} height={155} fill="#071825" stroke="#7dd3fc" strokeWidth="1.2" />
+        <text x={125} y={270} textAnchor="middle" fill="#93c5fd" fontSize="12" fontFamily="monospace">UNIT {f}C</text>
+        <rect x={320} y={190} width={230} height={155} fill="#071825" stroke="#7dd3fc" strokeWidth="1.2" />
+        <text x={435} y={270} textAnchor="middle" fill="#93c5fd" fontSize="12" fontFamily="monospace">UNIT {f}D</text>
+        <rect x={10} y={345} width={540} height={16} fill="#071120" stroke="#1e3a5c" strokeWidth="0.5" />
+        <text x={280} y={356} textAnchor="middle" fill="#3d6a8a" fontSize="7" fontFamily="monospace">OAKWOOD ESTATES HOA · FLOOR {f} PLAN · {info.dwg} · {info.revision}</text>
+      </svg>
+    );
+  }
+
+  return (
+    <div>
+      {/* Full-screen viewer overlay */}
+      {viewing && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden border border-slate-700" style={{ maxHeight: '90vh' }}>
+            <div className="px-5 py-3.5 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <Layers size={15} className="text-blue-400" />
+                <div>
+                  <h2 className="text-sm font-bold text-white">{info.floor} — {r.unit}</h2>
+                  <p className="text-xs text-slate-400">{info.dwg} · {info.revision}</p>
+                </div>
+              </div>
+              <button onClick={() => setViewing(false)} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-700 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-slate-950">
+              <MiniBlueprint />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SectionLabel>Unit Location</SectionLabel>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-slate-50 rounded-xl p-4">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">Floor</p>
+          <p className="text-lg font-bold text-slate-900">{info.floor}</p>
+          <p className="text-xs text-slate-400 mt-0.5">Building A</p>
+        </div>
+        <div className="bg-slate-50 rounded-xl p-4">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">Unit on Floor</p>
+          <p className="text-lg font-bold text-slate-900">{info.unit}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{r.nitNumber}</p>
+        </div>
+      </div>
+
+      <SectionLabel>Floor Blueprint</SectionLabel>
+      <div className="relative rounded-xl overflow-hidden border border-slate-200 mb-4 cursor-pointer group" onClick={() => setViewing(true)}>
+        <div className="h-52 bg-slate-950">
+          <MiniBlueprint />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/20 flex items-center gap-2">
+            <ZoomIn size={14} className="text-white" />
+            <span className="text-white text-xs font-medium">View Full Blueprint</span>
+          </div>
+        </div>
+      </div>
+
+      <SectionLabel>Drawing Details</SectionLabel>
+      {[
+        { label: 'Drawing Number', value: info.dwg },
+        { label: 'Revision',       value: info.revision },
+        { label: 'Floor Level',    value: info.floorNum === 0 ? 'Ground (G)' : `Level ${info.floorNum}` },
+        { label: 'Blueprint Type', value: 'Architectural Floor Plan' },
+        { label: 'Scale',          value: '1:100' },
+      ].map(({ label, value }) => (
+        <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
+          <span className="text-sm text-slate-500">{label}</span>
+          <span className="text-sm font-medium text-slate-800 font-mono">{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Resident Detail Panel ────────────────────────────────────────────────────
 
 function ResidentDetail({ resident, onUpdate, onClose }) {
@@ -1020,6 +1144,7 @@ function ResidentDetail({ resident, onUpdate, onClose }) {
     { id: 'access',     label: 'Access' },
     { id: 'violations', label: 'Violations', count: resident.violations?.length || 0 },
     { id: 'household',  label: 'Household' },
+    { id: 'floormap',   label: 'Floor Map' },
   ];
 
   return (
@@ -1056,6 +1181,7 @@ function ResidentDetail({ resident, onUpdate, onClose }) {
         {tab === 'access'     && <AccessTab     r={resident} onUpdate={onUpdate} />}
         {tab === 'violations' && <ViolationsTab r={resident} onUpdate={onUpdate} />}
         {tab === 'household'  && <HouseholdTab  r={resident} onUpdate={onUpdate} />}
+        {tab === 'floormap'   && <FloorMapTab   r={resident} />}
       </div>
     </div>
   );
