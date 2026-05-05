@@ -1,10 +1,10 @@
+import ChakrazLogo from './ChakrazLogo';
 import { clsx } from 'clsx';
 import {
   LayoutDashboard, Shield, CreditCard, BarChart2, Receipt,
   AlertTriangle, Wrench, Users, FolderOpen, MessageSquare,
   Building2, ChevronDown, LogOut, Map, Layers,
-} from 'lucide-react';
-import { useAuthStore } from '../hooks/useStore';
+} from 'lucide-react';import { useAuthStore } from '../hooks/useStore';
 
 const navGroups = [
   { label: 'Overview', items: [
@@ -45,8 +45,8 @@ export default function Sidebar({ currentPage, onNavigate, community }) {
       {/* Logo */}
       <div className="px-4 py-5 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-navy-700 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Building2 size={14} className="text-white" />
+          <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
+            <ChakrazLogo size={20} />
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-900 leading-none">ChakrazAI HOA</p>
