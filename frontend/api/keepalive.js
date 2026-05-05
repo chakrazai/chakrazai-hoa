@@ -1,37 +1,27 @@
-import pg from 'pg';
-
-const { Pool } = pg;
-
-let pool;
-
-function getPool() {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      max: 1,
-      connectionTimeoutMillis: 5000,
-    });
-  }
-  return pool;
-}
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   const start = Date.now();
 
-  if (!process.env.DATABASE_URL) {
-    return res.status(500).json({ ok: false, error: 'DATABASE_URL not configured' });
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    return res.status(500).json({ ok: false, error: 'SUPABASE_URL or SUPABASE_ANON_KEY not configured' });
   }
 
   try {
-    const db = getPool();
-    const result = await db.query('SELECT NOW() AS time, current_database() AS db');
-    return res.status(200).json({
-      ok: true,
-      db: result.rows[0].db,
-      serverTime: result.rows[0].time,
-      latencyMs: Date.now() - start,
-    });
+    const supabase = createClient(url, key);
+    // Simple ping — just checks the connection is alive
+    const { error } = await supabase.from('users').select('id').limit(1);
+    const latencyMs = Date.now() - start;
+
+    if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
+      // PGRST116 = no rows, 42P01 = table doesn't exist — both mean DB is alive
+      return res.status(500).json({ ok: false, error: error.message, latencyMs });
+    }
+
+    return res.status(200).json({ ok: true, message: 'Supabase is alive', latencyMs });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message, latencyMs: Date.now() - start });
   }
