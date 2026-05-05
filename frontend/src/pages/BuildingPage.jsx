@@ -117,7 +117,7 @@ function GroundFloorSVG() {
         </g>
       ))}
 
-      <DimLine x1={10} y1={5} x2={550} y2={5} label="86'-0"" />
+      <DimLine x1={10} y1={5} x2={550} y2={5} label={"86'-0\""} />
       <TitleBlock text="OAKWOOD ESTATES HOA · GROUND FLOOR PLAN · DWG-A1.0 · SCALE 1:100 · REV D" />
     </svg>
   );
