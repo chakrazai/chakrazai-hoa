@@ -5,3 +5,4 @@ export { Tax, Violations, Maintenance, Vendors, Documents, Communications, Commu
 export { Residents } from './ResidentsPage.jsx';
 export { default as BuildingPage } from './BuildingPage.jsx';
 export { BoardMembersPage, ElectionsPage, MeetingsPage } from './GovernancePages.jsx';
+export { default as BallotManagementPage } from './BallotManagementPage.jsx';
