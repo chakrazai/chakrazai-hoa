@@ -76,6 +76,39 @@ const nowStr = () => new Date().toLocaleDateString('en-US', { month: 'short', da
 const nowTs  = () => new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 const mkAudit = (action, details, by, variant = 'gray') => ({ id: `${Date.now()}-${Math.random()}`, ts: nowTs(), action, details, by, variant });
 
+// ─── HOA / address constants ───────────────────────────────────────────────────
+const HOA_INFO = {
+  name:     'Oakwood Estates HOA',
+  c_o:      'c/o ChakrazAI HOA Management',
+  address1: '500 Oakwood Drive, Suite 100',
+  city: 'Sacramento', state: 'CA', zip: '95814',
+  phone: '(916) 555-0100',
+  email: 'elections@oakwoodestates.org',
+};
+
+const SAMPLE_RESIDENTS = [
+  { unit: 'A1', name: 'James Wilson',      address1: '1000 Oakwood Dr, Apt A1', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'A2', name: 'Maria Santos',      address1: '1000 Oakwood Dr, Apt A2', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'A3', name: 'David Kim',         address1: '1000 Oakwood Dr, Apt A3', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'A4', name: 'Lisa Chen',         address1: '1000 Oakwood Dr, Apt A4', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'A5', name: 'Robert Hayes',      address1: '1000 Oakwood Dr, Apt A5', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'B1', name: 'Emily Nguyen',      address1: '1002 Oakwood Dr, Apt B1', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'B2', name: 'Michael Torres',    address1: '1002 Oakwood Dr, Apt B2', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'B3', name: 'Sarah Park',        address1: '1002 Oakwood Dr, Apt B3', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'B4', name: 'Thomas Green',      address1: '1002 Oakwood Dr, Apt B4', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'B5', name: 'Anna Lopez',        address1: '1002 Oakwood Dr, Apt B5', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'C1', name: 'Steven Brown',      address1: '1004 Oakwood Dr, Apt C1', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'C2', name: 'Jennifer Lee',      address1: '1004 Oakwood Dr, Apt C2', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'C3', name: 'Christopher Davis', address1: '1004 Oakwood Dr, Apt C3', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'C4', name: 'Amanda Clark',      address1: '1004 Oakwood Dr, Apt C4', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'C5', name: 'Kevin Martinez',    address1: '1004 Oakwood Dr, Apt C5', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'D1', name: 'Rachel Johnson',    address1: '1006 Oakwood Dr, Apt D1', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'D2', name: 'Brian Anderson',    address1: '1006 Oakwood Dr, Apt D2', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'D3', name: 'Megan White',       address1: '1006 Oakwood Dr, Apt D3', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'D4', name: 'Daniel Thompson',   address1: '1006 Oakwood Dr, Apt D4', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'D5', name: 'Jessica Garcia',    address1: '1006 Oakwood Dr, Apt D5', city: 'Sacramento', state: 'CA', zip: '95814' },
+];
+
 // ─── Seed data ────────────────────────────────────────────────────────────────
 const SEED = [
   {
@@ -1082,6 +1115,309 @@ function ComplianceTab({ election, role, onUpdate, addAudit }) {
   );
 }
 
+// ─── Envelopes Tab ────────────────────────────────────────────────────────────
+function EnvelopesTab({ election, role }) {
+  const ENV_TYPES = {
+    ballot_mailing: {
+      label: 'Ballot Mailing Envelope',
+      desc:  'Outgoing: HOA → Resident. Outer envelope for mailing the ballot package to each eligible member.',
+      legal: 'Civil Code § 5115',
+      color: '#1e3a5f',
+    },
+    return_outer: {
+      label: 'Return Outer Envelope (Voter-Signed)',
+      desc:  'Return: Resident → Inspector. Includes voter name, unit, and signature certification line.',
+      legal: 'Civil Code § 5115, § 5120',
+      color: '#5b21b6',
+    },
+    inner_ballot: {
+      label: 'Inner Ballot Envelope (Secret)',
+      desc:  'Secret ballot privacy envelope. No voter ID. Sealed separately inside the return outer envelope.',
+      legal: 'Civil Code § 5120',
+      color: '#065f46',
+    },
+  };
+
+  const [envType, setEnvType]   = useState('ballot_mailing');
+  const [count,   setCount]     = useState(Math.min(20, election.totalEligible || 20));
+  const [hoa,     setHoa]       = useState({ ...HOA_INFO });
+  const [inspAddr, setInspAddr] = useState({
+    name:     election.inspector?.name || 'Inspector of Elections',
+    firm:     election.inspector?.firm || `c/o ${HOA_INFO.name}`,
+    address1: HOA_INFO.address1,
+    city: HOA_INFO.city, state: HOA_INFO.state, zip: HOA_INFO.zip,
+  });
+
+  const buildHTML = (type, residents) => {
+    const meta = ENV_TYPES[type];
+    const css = `
+      @page { size: 9.5in 4.125in landscape; margin: 0; }
+      * { box-sizing: border-box; }
+      body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background: white; }
+      .env { width: 9.5in; height: 4.125in; position: relative; page-break-after: always;
+             border: 1px solid #ccc; overflow: hidden; background: white; }
+      .env:last-child { page-break-after: avoid; }
+      .ret  { position: absolute; top: 0.3in; left: 0.3in; font-size: 9pt; line-height: 1.5; max-width: 2.6in; }
+      .ret .org { font-weight: bold; font-size: 10pt; color: ${meta.color}; }
+      .stamp { position: absolute; top: 0.25in; right: 0.3in; width: 1.1in; height: 0.85in;
+               border: 1.5px dashed #aaa; display: flex; align-items: center; justify-content: center;
+               font-size: 7.5pt; color: #bbb; text-align: center; line-height: 1.4; }
+      .to   { position: absolute; top: 50%; left: 50%; transform: translate(-28%, -50%);
+              font-size: 11pt; line-height: 1.65; }
+      .to .name { font-weight: bold; font-size: 12pt; }
+      .bar  { position: absolute; bottom: 0; left: 0; right: 0; background: ${meta.color};
+              color: white; font-size: 7.5pt; font-weight: bold; padding: 4px 12px;
+              text-transform: uppercase; letter-spacing: 0.05em;
+              display: flex; justify-content: space-between; align-items: center; }
+      .sig  { position: absolute; bottom: 0.45in; left: 0.25in; right: 0.25in; font-size: 8.5pt; color: #333; }
+      .sigline { border-top: 1px solid #333; margin-top: 8px; padding-top: 2px; font-size: 7.5pt; color: #555; }
+      .inner-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+      .inner-center .ballot-icon { font-size: 30pt; margin-bottom: 6px; }
+      .inner-center .btitle { font-size: 14pt; font-weight: bold; color: ${meta.color}; }
+      .inner-center .bsub   { font-size: 9.5pt; color: #444; margin-top: 4px; }
+      .inner-center .bnote  { font-size: 8.5pt; color: #c00; font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 10px; }
+      .inner-center .blegal { font-size: 7.5pt; color: #999; margin-top: 4px; }
+      .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-18deg);
+                   font-size: 90pt; color: rgba(0,0,0,0.025); font-weight: 900; user-select: none;
+                   pointer-events: none; white-space: nowrap; }
+      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    `;
+
+    let body = '';
+    if (type === 'ballot_mailing') {
+      body = residents.map(r => `
+        <div class="env">
+          <div class="watermark">HOA</div>
+          <div class="ret">
+            <div class="org">${hoa.name}</div>
+            ${hoa.c_o ? `<div>${hoa.c_o}</div>` : ''}
+            <div>${hoa.address1}</div>
+            <div>${hoa.city}, ${hoa.state} ${hoa.zip}</div>
+          </div>
+          <div class="stamp">PLACE<br>POSTAGE<br>HERE</div>
+          <div class="to">
+            <div class="name">${r.name}</div>
+            <div>Unit ${r.unit}</div>
+            <div>${r.address1}</div>
+            <div>${r.city}, ${r.state} ${r.zip}</div>
+          </div>
+          <div class="bar">
+            <span>Official Ballot Enclosed — Do Not Forward</span>
+            <span>${election.title}</span>
+          </div>
+        </div>`).join('');
+    } else if (type === 'return_outer') {
+      body = residents.map(r => `
+        <div class="env">
+          <div class="watermark">VOTE</div>
+          <div class="ret">
+            <div class="org">${inspAddr.name}</div>
+            ${inspAddr.firm ? `<div>${inspAddr.firm}</div>` : ''}
+            <div>${inspAddr.address1}</div>
+            <div>${inspAddr.city}, ${inspAddr.state} ${inspAddr.zip}</div>
+          </div>
+          <div class="stamp">PLACE<br>POSTAGE<br>HERE</div>
+          <div class="to">
+            <div class="name">${r.name} — Unit ${r.unit}</div>
+            <div style="font-size:9pt;color:#888;">${r.address1} · ${r.city}, ${r.state} ${r.zip}</div>
+          </div>
+          <div class="sig">
+            <div style="font-weight:bold;color:${meta.color};margin-bottom:4px;">
+              VOTER CERTIFICATION — REQUIRED (Civil Code § 5115)
+            </div>
+            <div style="font-size:8pt;">I certify I am a member/owner in good standing of ${hoa.name} and have not previously voted in this election.</div>
+            <div class="sigline">Signature: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+            <div class="sigline">Printed Name: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Unit: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+          </div>
+          <div class="bar">
+            <span>Return Outer Envelope — Sign &amp; Seal Before Returning</span>
+            <span>${election.title}</span>
+          </div>
+        </div>`).join('');
+    } else {
+      body = residents.map((_, i) => `
+        <div class="env">
+          <div class="inner-center">
+            <div class="ballot-icon">🗳</div>
+            <div class="btitle">OFFICIAL BALLOT</div>
+            <div class="bsub">${election.title}</div>
+            <div class="bnote">Do Not Open Before the Counting Meeting</div>
+            <div class="blegal">Civil Code § 5120 &nbsp;·&nbsp; No Voter ID Inside &nbsp;·&nbsp; Ballot ${i + 1} of ${residents.length}</div>
+          </div>
+          <div class="bar">
+            <span>Inner Ballot Envelope — Secret · Seal After Marking Ballot</span>
+            <span>${hoa.name}</span>
+          </div>
+        </div>`).join('');
+    }
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Envelopes — ${election.title}</title>
+<style>${css}</style></head><body>${body}</body></html>`;
+  };
+
+  const handlePrint = () => {
+    const residents = SAMPLE_RESIDENTS.slice(0, count);
+    const html = buildHTML(envType, residents);
+    const w = window.open('', '_blank', 'width=1000,height=700');
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 600);
+  };
+
+  const meta = ENV_TYPES[envType];
+
+  return (
+    <div>
+      <SL>Envelope Type</SL>
+      <div className="space-y-2 mb-4">
+        {Object.entries(ENV_TYPES).map(([k, v]) => (
+          <label key={k} className={clsx(
+            'flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all',
+            envType === k ? 'border-navy-500 bg-navy-50' : 'border-slate-100 hover:border-slate-200'
+          )}>
+            <input type="radio" name="envType" value={k} checked={envType === k}
+              onChange={() => setEnvType(k)} className="mt-0.5 flex-shrink-0"/>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                <span className="text-xs font-bold text-slate-800">{v.label}</span>
+                <span className="text-[10px] text-slate-400">{v.legal}</span>
+              </div>
+              <p className="text-[11px] text-slate-500">{v.desc}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      {(envType === 'ballot_mailing' || envType === 'inner_ballot') && (
+        <>
+          <SL>From Address (HOA)</SL>
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 mb-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className={fLabel}>Organization Name</label>
+                <input value={hoa.name} onChange={e => setHoa(p => ({ ...p, name: e.target.value }))} className={iCls}/></div>
+              <div><label className={fLabel}>c/o Line</label>
+                <input value={hoa.c_o} onChange={e => setHoa(p => ({ ...p, c_o: e.target.value }))} className={iCls}/></div>
+            </div>
+            <div><label className={fLabel}>Street Address</label>
+              <input value={hoa.address1} onChange={e => setHoa(p => ({ ...p, address1: e.target.value }))} className={iCls}/></div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className={fLabel}>City</label>
+                <input value={hoa.city} onChange={e => setHoa(p => ({ ...p, city: e.target.value }))} className={iCls}/></div>
+              <div><label className={fLabel}>State</label>
+                <input value={hoa.state} onChange={e => setHoa(p => ({ ...p, state: e.target.value }))} className={iCls}/></div>
+              <div><label className={fLabel}>ZIP</label>
+                <input value={hoa.zip} onChange={e => setHoa(p => ({ ...p, zip: e.target.value }))} className={iCls}/></div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {envType === 'return_outer' && (
+        <>
+          <SL>Return-To Address (Inspector / HOA)</SL>
+          <div className="p-3 bg-violet-50 rounded-xl border border-violet-200 space-y-2 mb-4">
+            <div className="p-2 bg-violet-100 rounded-lg">
+              <p className="text-[11px] text-violet-800 font-medium">Return envelopes should be addressed to the Inspector of Elections or secure HOA mailbox (Civil Code § 5115).</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className={fLabel}>Inspector / Entity Name</label>
+                <input value={inspAddr.name} onChange={e => setInspAddr(p => ({ ...p, name: e.target.value }))} className={iCls}/></div>
+              <div><label className={fLabel}>Firm / c/o Line</label>
+                <input value={inspAddr.firm} onChange={e => setInspAddr(p => ({ ...p, firm: e.target.value }))} className={iCls}/></div>
+            </div>
+            <div><label className={fLabel}>Street Address</label>
+              <input value={inspAddr.address1} onChange={e => setInspAddr(p => ({ ...p, address1: e.target.value }))} className={iCls}/></div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className={fLabel}>City</label>
+                <input value={inspAddr.city} onChange={e => setInspAddr(p => ({ ...p, city: e.target.value }))} className={iCls}/></div>
+              <div><label className={fLabel}>State</label>
+                <input value={inspAddr.state} onChange={e => setInspAddr(p => ({ ...p, state: e.target.value }))} className={iCls}/></div>
+              <div><label className={fLabel}>ZIP</label>
+                <input value={inspAddr.zip} onChange={e => setInspAddr(p => ({ ...p, zip: e.target.value }))} className={iCls}/></div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <SL>Quantity &amp; Print</SL>
+      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 mb-4">
+        <div className="flex items-center gap-4 mb-3">
+          <div>
+            <label className={fLabel}>Envelopes to Print</label>
+            <input type="number" value={count} min={1} max={election.totalEligible || 200}
+              onChange={e => setCount(Math.max(1, Math.min(Number(e.target.value), election.totalEligible || 200)))}
+              className={iCls + ' w-28'}/>
+          </div>
+          <div>
+            <p className="text-[10px] text-slate-400 mb-0.5">Total eligible voters</p>
+            <p className="text-sm font-bold text-slate-800">{election.totalEligible}</p>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl border mb-3 font-mono text-[11px] leading-relaxed"
+          style={{ borderColor: meta.color + '50', background: meta.color + '08' }}>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-2 font-sans"
+            style={{ color: meta.color }}>{meta.label} — Preview</p>
+          {envType === 'ballot_mailing' && (<>
+            <span className="font-bold text-slate-800">{hoa.name}</span><br/>
+            {hoa.c_o && <>{hoa.c_o}<br/></>}
+            {hoa.address1}<br/>
+            {hoa.city}, {hoa.state} {hoa.zip}
+            <div className="mt-2 pt-2 border-t border-slate-200">
+              <span className="font-bold text-slate-800">[Resident Name]</span> — Unit [XX]<br/>
+              [Street Address], Sacramento, CA 95814
+            </div>
+            <div className="mt-1 text-[10px] font-bold uppercase" style={{ color: meta.color }}>
+              Official Ballot Enclosed — Do Not Forward
+            </div>
+          </>)}
+          {envType === 'return_outer' && (<>
+            <span className="font-bold text-slate-800">{inspAddr.name}</span><br/>
+            {inspAddr.firm && <>{inspAddr.firm}<br/></>}
+            {inspAddr.address1}<br/>
+            {inspAddr.city}, {inspAddr.state} {inspAddr.zip}
+            <div className="mt-2 pt-2 border-t border-slate-200 text-[10px] text-slate-500 italic font-sans">
+              Voter signature line · certification block · civil code notice
+            </div>
+          </>)}
+          {envType === 'inner_ballot' && (
+            <div className="text-center py-1">
+              <span className="font-bold text-slate-900 text-sm font-sans">OFFICIAL BALLOT</span><br/>
+              <span className="italic text-slate-600">{election.title}</span><br/>
+              <span className="text-rose-600 font-bold text-[10px] uppercase tracking-wide font-sans">
+                Do Not Open Before Counting Meeting
+              </span><br/>
+              <span className="text-slate-400 text-[9px] font-sans">Civil Code § 5120 · No Voter ID Inside</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <PermGate role={role} action="generateNotices" tip="HOA Manager or Inspector required">
+            <Button variant="primary" size="sm" onClick={handlePrint}>
+              <Printer size={12}/>Print {count} Envelope{count !== 1 ? 's' : ''}
+            </Button>
+          </PermGate>
+          <p className="text-[11px] text-slate-400">Opens print dialog · #10 envelope size (9.5″ × 4.125″)</p>
+        </div>
+      </div>
+
+      <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+        <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-2">Davis-Stirling Double-Envelope System (Civil Code § 5115, § 5120)</p>
+        <div className="space-y-1.5 text-[11px] text-blue-700">
+          <p><span className="font-semibold">1. Ballot Mailing Envelope</span> — HOA mails ballot package to each eligible member. Contains: marked ballot instructions + inner envelope + pre-addressed return outer envelope.</p>
+          <p><span className="font-semibold">2. Inner Ballot Envelope</span> — Member places completed ballot inside, seals it. No voter ID on or inside this envelope. Protects ballot secrecy.</p>
+          <p><span className="font-semibold">3. Return Outer Envelope</span> — Member places sealed inner envelope inside, signs and dates the voter certification on the outer envelope, and returns to the Inspector of Elections.</p>
+          <p className="text-[10px] text-blue-600 pt-1.5 border-t border-blue-200 mt-0.5">
+            Inspector logs receipt of outer envelopes only. Inner envelopes must not be opened until the public counting meeting (Civil Code § 5120(b)).
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Election detail (tab router) ─────────────────────────────────────────────
 function ElectionDetail({ election, role, onUpdate, onClose }) {
   const [tab, setTab] = useState('overview');
@@ -1099,6 +1435,7 @@ function ElectionDetail({ election, role, onUpdate, onClose }) {
     { id: 'notices',     label: 'Notices',     roles: ['manager'] },
     { id: 'compliance',  label: 'Compliance',  roles: ['manager','inspector','resident'] },
     { id: 'audit',       label: 'Audit Log',   roles: ['manager','inspector'] },
+    { id: 'envelopes',   label: 'Envelopes',   roles: ['manager','inspector','board'] },
   ].filter(t => t.roles.includes(role));
 
   const stageColors = { draft:'gray', nominations_open:'blue', nominations_closed:'amber', inspector_assigned:'blue', ballots_distributed:'blue', voting_open:'green', counting_scheduled:'amber', results_certified:'green', archived:'gray' };
@@ -1136,6 +1473,7 @@ function ElectionDetail({ election, role, onUpdate, onClose }) {
         {tab === 'counting'    && <CountingTab    election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'notices'     && <NoticesTab     election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'compliance'  && <ComplianceTab  election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'envelopes' && <EnvelopesTab election={election} role={role}/>}
         {tab === 'audit' && (
           <div>
             <div className="flex items-center justify-between mt-1 mb-1">
