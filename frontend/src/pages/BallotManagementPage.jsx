@@ -1,167 +1,234 @@
+/**
+ * Ballot Management — Davis-Stirling Act compliant
+ * California Civil Code §§ 5100–5145 (as amended through Jan 1, 2025)
+ */
 import { useState, useMemo, useCallback } from 'react';
 import {
-  Plus, X, Check, Edit2, Trash2, ChevronRight, Search,
-  Shield, Lock, Unlock, Clock, FileText, CheckCircle,
-  AlertTriangle, Award, Printer, Info, Bell, Download,
+  Plus, X, Check, Edit2, Trash2, ChevronRight, Search, Shield,
+  Lock, Unlock, Clock, FileText, CheckCircle, XCircle, AlertTriangle,
+  Award, Printer, Info, Bell, Download, Users, Calendar, Mail,
+  Archive, UserCheck, AlertCircle, Scale,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import {
-  Card, Badge, Button, SectionHeader, Tabs,
-  Table, Th, Td, Tr, MetricCard,
-} from '../components/ui';
+import { Card, Badge, Button, MetricCard, Alert } from '../components/ui';
 
 // ─── RBAC ─────────────────────────────────────────────────────────────────────
-
 const ROLES = {
-  admin:     { label: 'Admin',        color: 'bg-rose-700' },
-  board:     { label: 'Board Member', color: 'bg-navy-700' },
-  secretary: { label: 'Secretary',    color: 'bg-violet-700' },
-  resident:  { label: 'Resident',     color: 'bg-slate-500' },
+  manager:   { label: 'HOA Manager',           color: 'bg-rose-700'   },
+  board:     { label: 'Board Member',           color: 'bg-navy-700'   },
+  inspector: { label: 'Inspector of Elections', color: 'bg-violet-700' },
+  auditor:   { label: 'Financial Auditor',      color: 'bg-amber-700'  },
+  resident:  { label: 'Resident / Member',      color: 'bg-slate-500'  },
 };
-
 const PERMISSIONS = {
-  createBallot:    ['admin', 'secretary'],
-  editBallot:      ['admin', 'secretary'],
-  addCandidate:    ['admin', 'secretary'],
-  openVoting:      ['admin', 'board', 'secretary'],
-  closeVoting:     ['admin', 'board', 'secretary'],
-  enterResults:    ['admin', 'secretary'],
-  certify:         ['admin', 'board'],
-  manageRetention: ['admin', 'secretary'],
-  viewAuditLog:    ['admin', 'secretary'],
+  createElection:        ['manager'],
+  configureElection:     ['manager'],
+  advanceStage:          ['manager'],
+  assignInspector:       ['manager', 'board'],
+  viewTimeline:          ['manager', 'board', 'inspector'],
+  manageNominations:     ['manager'],
+  submitNomination:      ['resident', 'board'],
+  viewCandidates:        ['manager', 'board', 'inspector', 'resident'],
+  viewBallotReceiptLog:  ['inspector'],
+  enterResults:          ['inspector'],
+  certifyResults:        ['inspector'],
+  viewCertifiedResults:  ['manager', 'board', 'inspector', 'resident'],
+  manageInspectionReqs:  ['inspector'],
+  submitInspectionReq:   ['resident'],
+  authorizeDestruction:  ['inspector'],
+  generateNotices:       ['manager'],
+  viewAuditLog:          ['manager', 'inspector'],
+  manageRetention:       ['manager', 'inspector'],
+  viewCompliance:        ['manager', 'inspector'],
+};
+const can = (role, action) => (PERMISSIONS[action] || []).includes(role);
+
+// ─── Stage pipeline ───────────────────────────────────────────────────────────
+const STAGES = [
+  { id: 'draft',               label: 'Draft'              },
+  { id: 'nominations_open',    label: 'Nominations Open'   },
+  { id: 'nominations_closed',  label: 'Nominations Closed' },
+  { id: 'inspector_assigned',  label: 'Inspector Assigned' },
+  { id: 'ballots_distributed', label: 'Ballots Out'        },
+  { id: 'voting_open',         label: 'Voting Open'        },
+  { id: 'counting_scheduled',  label: 'Counting Scheduled' },
+  { id: 'results_certified',   label: 'Results Certified'  },
+  { id: 'archived',            label: 'Archived'           },
+];
+const stageIndex = id => STAGES.findIndex(s => s.id === id);
+
+// ─── Notice types ─────────────────────────────────────────────────────────────
+const NOTICE_TYPES = {
+  call_for_nominations: { label: 'Call for Nominations',       legal: 'Civil Code § 5115',   required: ['board_director', 'recall'] },
+  nomination_reminder:  { label: 'Nomination Reminder',        legal: 'Civil Code § 5115',   required: ['board_director', 'recall'] },
+  pre_ballot_notice:    { label: 'Pre-Ballot Notice (30 days)',legal: 'Civil Code § 5115',   required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+  opt_in_notice:        { label: 'Electronic Voting Opt-In Notice', legal: 'Civil Code § 5260', required: ['board_director', 'recall', 'ccr_amendment'] },
+  ballot_package:       { label: 'Ballot Package Distribution',legal: 'Civil Code § 5115',   required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+  counting_meeting:     { label: 'Counting Meeting Notice',    legal: 'Civil Code § 5120',   required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+  results_publication:  { label: 'Results Publication',        legal: 'Civil Code § 5120',   required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
 };
 
-function can(role, action) {
-  return (PERMISSIONS[action] || []).includes(role);
-}
-
-// ─── Retention ────────────────────────────────────────────────────────────────
-
-const RETENTION_YEARS = { Board: 7, Bylaw: 7, Special: 5, Committee: 3 };
-const RETENTION_BASIS = {
-  Board:     'State HOA Act §5200 — ballot & voting records, 7 years',
-  Bylaw:     'State HOA Act §5200 — governing document records, 7 years',
-  Special:   "Robert's Rules of Order — special vote records, 5 years",
-  Committee: 'HOA Bylaws Article 9 — committee records, 3 years',
-};
-
-function addYears(dateStr, years) {
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d)) return '—';
-    d.setFullYear(d.getFullYear() + years);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch { return '—'; }
-}
-
-function daysUntil(dateStr) {
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d)) return null;
-    return Math.ceil((d - new Date()) / 86400000);
-  } catch { return null; }
-}
-
-// ─── Audit helpers ────────────────────────────────────────────────────────────
-
-function makeEntry(action, details, by = 'System', variant = 'gray') {
-  return {
-    id: `${Date.now()}-${Math.random()}`,
-    ts: new Date().toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: 'numeric', minute: '2-digit',
-    }),
-    action, details, by, variant,
-  };
-}
-
-// ─── Shared style constants ───────────────────────────────────────────────────
-
-const iCls = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
-const fLabel = 'block text-xs font-medium text-slate-500 mb-1';
-
-function SL({ children }) {
-  return (
-    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-5 mb-2">
-      {children}
-    </p>
-  );
-}
+// ─── Utilities ────────────────────────────────────────────────────────────────
+const daysUntil = ds => { try { const d = new Date(ds); return isNaN(d) ? null : Math.ceil((d - new Date()) / 86400000); } catch { return null; } };
+const addYears  = (ds, y) => { try { const d = new Date(ds); d.setFullYear(d.getFullYear() + y); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return null; } };
+const daysBetween = (a, b) => { try { return Math.round((new Date(b) - new Date(a)) / 86400000); } catch { return null; } };
+const nowStr = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const nowTs  = () => new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+const mkAudit = (action, details, by, variant = 'gray') => ({ id: `${Date.now()}-${Math.random()}`, ts: nowTs(), action, details, by, variant });
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
-
 const SEED = [
   {
     id: 1,
-    title: 'Board of Directors Election 2024',
-    type: 'Board', status: 'certified', votingStatus: 'closed',
-    startDate: 'Nov 1, 2023', endDate: 'Nov 30, 2023',
-    certifiedDate: 'Dec 3, 2023', certifiedBy: ['Jane Ramirez', 'Tom Nakamura'],
-    totalEligible: 148, votesCast: 112, seatsAvailable: 3,
-    votingMethod: 'Mail-in & Online',
-    ballotInstructions: 'Vote for up to 3 candidates. Mark the oval completely. Ballots with more than 3 selections will be voided. Return by Nov 30, 2023.',
-    description: 'Annual election for 3 open board seats. Candidates submitted bios in October.',
-    retentionYears: 7, retentionBasis: RETENTION_BASIS.Board,
-    destroyDate: 'Nov 30, 2030', retentionStatus: 'active', retentionNotes: '',
+    title: 'Board of Directors Election 2026',
+    type: 'board_director',
+    stage: 'nominations_open',
+    seatsAvailable: 3,
+    votingMethod: 'hybrid',
+    quorumRequired: true,
+    quorumPct: 25,
+    totalEligible: 148,
+    ballotsDistributed: 0,
+    ballotsReceived: 0,
+    description: 'Annual election for 3 open board seats.',
+    dates: {
+      nominationsOpen: 'Sep 1, 2026',
+      nominationReminder: 'Nov 15, 2026',
+      nominationsClose: 'Nov 30, 2026',
+      optInDeadline: 'Oct 2, 2026',
+      preBallotNotice: 'Dec 31, 2026',
+      ballotDistribution: 'Jan 31, 2027',
+      votingDeadline: 'Mar 2, 2027',
+      countingMeeting: 'Mar 3, 2027',
+      retentionExpiry: 'Mar 3, 2028',
+    },
+    inspector: null,
     candidates: [
-      { id:1, name:'Jane Ramirez',  bio:'Incumbent president seeking second term.',    eligible:true, votes:98, elected:true  },
-      { id:2, name:'Tom Nakamura',  bio:'VP focused on maintenance and vendors.',       eligible:true, votes:87, elected:true  },
-      { id:3, name:'Maria Garcia',  bio:'CPA, 15 years HOA finance experience.',       eligible:true, votes:91, elected:true  },
-      { id:4, name:'Robert Nguyen', bio:'Local contractor, first-time candidate.',     eligible:true, votes:44, elected:false },
-      { id:5, name:'Linda Park',    bio:'Resident since 2010, community events focus.',eligible:true, votes:38, elected:false },
+      { id: 1, name: 'Sarah Chen',    unit: '14B', bio: 'Incumbent secretary, 6 years on board.',        eligible: true,  disqualified: false },
+      { id: 2, name: 'David Park',    unit: '22A', bio: 'Civil engineer, 12 years as resident.',          eligible: true,  disqualified: false },
+      { id: 3, name: 'Yolanda Reyes', unit: '7C',  bio: 'Retired teacher, active in community events.',   eligible: true,  disqualified: false },
+      { id: 4, name: 'Greg Hoffman',  unit: '31D', bio: 'Submitted late — nomination period not yet closed.', eligible: true, disqualified: false },
     ],
+    ballotInstructions: 'Vote for up to 3 candidates. Return ballot by Mar 2, 2027.',
+    ballotReceiptLog: [],
+    countingMeeting: { date: 'Mar 3, 2027', time: '6:00 PM', location: 'Clubhouse — Main Hall', observers: [] },
+    notices: [
+      { id: 'n1', type: 'call_for_nominations', sentDate: 'Sep 1, 2026', recipientCount: 148, method: 'Email & Mail', status: 'sent' },
+    ],
+    inspectionRequests: [],
+    acclamationDeclared: false,
+    adjournedMeeting: null,
+    quorumMet: null,
+    results: null,
+    certifiedDate: null,
+    retentionStatus: 'active',
+    destroyDate: 'Mar 3, 2028',
     auditLog: [
-      { id:'a6', ts:'Dec 3, 2023 10:14 AM',  action:'Results Certified',   details:'Ramirez (98), Garcia (91), Nakamura (87) elected. 2 board members approved.', by:'Jane Ramirez', variant:'green' },
-      { id:'a5', ts:'Dec 1, 2023 9:00 AM',   action:'Results Entered',     details:'Vote tallies entered for all 5 candidates. Total ballots: 112.',               by:'Sarah Chen',   variant:'blue'  },
-      { id:'a4', ts:'Nov 30, 2023 11:59 PM', action:'Voting Closed',       details:'112 of 148 eligible residents voted (75.7% turnout).',                        by:'System',       variant:'gray'  },
-      { id:'a3', ts:'Nov 1, 2023 8:00 AM',   action:'Voting Opened',       details:'Online portal and mail-in ballots activated.',                                by:'System',       variant:'blue'  },
-      { id:'a2', ts:'Oct 15, 2023 2:30 PM',  action:'Candidates Locked',   details:'5 candidates approved and ballot finalized.',                                  by:'Sarah Chen',   variant:'amber' },
-      { id:'a1', ts:'Sep 30, 2023 11:00 AM', action:'Ballot Created',      details:'Election created. 3 seats. Method: Mail-in & Online.',                        by:'Sarah Chen',   variant:'gray'  },
+      { id: 'a2', ts: 'Sep 1, 2026 9:00 AM',  action: 'Nominations Opened', details: 'Call for Nominations sent to 148 eligible members.', by: 'HOA Manager', variant: 'blue' },
+      { id: 'a1', ts: 'Aug 25, 2026 3:00 PM', action: 'Election Created',   details: 'Board election 2026 created. 3 seats. Hybrid voting.', by: 'HOA Manager', variant: 'gray' },
     ],
   },
   {
     id: 2,
-    title: 'Bylaw Amendment Vote 2024',
-    type: 'Bylaw', status: 'certified', votingStatus: 'closed',
-    startDate: 'Mar 1, 2024', endDate: 'Mar 15, 2024',
-    certifiedDate: 'Mar 17, 2024', certifiedBy: ['Jane Ramirez', 'Maria Garcia'],
-    totalEligible: 148, votesCast: 89, seatsAvailable: 1,
-    votingMethod: 'Mail-in',
-    ballotInstructions: 'Vote YES or NO on the proposed amendment. A two-thirds supermajority of votes cast is required for passage. Return ballot by Mar 15, 2024.',
-    description: 'Amendment to Section 4.2 — Rental Restrictions. Max rental period: 30 → 90 days.',
-    retentionYears: 7, retentionBasis: RETENTION_BASIS.Bylaw,
-    destroyDate: 'Mar 15, 2031', retentionStatus: 'active', retentionNotes: '',
+    title: 'Board of Directors Election 2024',
+    type: 'board_director',
+    stage: 'archived',
+    seatsAvailable: 3,
+    votingMethod: 'paper',
+    quorumRequired: true,
+    quorumPct: 25,
+    totalEligible: 148,
+    ballotsDistributed: 148,
+    ballotsReceived: 112,
+    description: 'Annual election for 3 open board seats — completed.',
+    dates: {
+      nominationsOpen: 'Sep 1, 2023', nominationReminder: 'Nov 15, 2023', nominationsClose: 'Nov 30, 2023',
+      optInDeadline: null, preBallotNotice: 'Dec 30, 2023', ballotDistribution: 'Jan 1, 2024',
+      votingDeadline: 'Feb 1, 2024', countingMeeting: 'Feb 2, 2024', retentionExpiry: 'Feb 2, 2025',
+    },
+    inspector: { name: 'Patricia Winters', firm: 'Winters Election Services', contact: 'p.winters@winterselections.com', assignedDate: 'Dec 15, 2023', conflictChecked: true, declaration: 'Not a director, candidate, related party, or HOA contractor.' },
     candidates: [
-      { id:1, name:'Yes — Approve Amendment', bio:'', eligible:true, votes:61, elected:true  },
-      { id:2, name:'No — Reject Amendment',   bio:'', eligible:true, votes:28, elected:false },
+      { id: 1, name: 'Jane Ramirez',  unit: '1A', bio: 'Incumbent president.', eligible: true, disqualified: false, votes: 98, elected: true },
+      { id: 2, name: 'Tom Nakamura',  unit: '2B', bio: 'VP, maintenance focus.', eligible: true, disqualified: false, votes: 87, elected: true },
+      { id: 3, name: 'Maria Garcia',  unit: '3C', bio: 'CPA, 15 years HOA experience.', eligible: true, disqualified: false, votes: 91, elected: true },
+      { id: 4, name: 'Robert Nguyen', unit: '4D', bio: 'First-time candidate.', eligible: true, disqualified: false, votes: 44, elected: false },
+      { id: 5, name: 'Linda Park',    unit: '5E', bio: 'Community events focus.', eligible: true, disqualified: false, votes: 38, elected: false },
     ],
+    ballotInstructions: 'Vote for up to 3 candidates. Return by Feb 1, 2024.',
+    ballotReceiptLog: Array.from({ length: 112 }, (_, i) => ({ unit: `Unit ${i + 1}`, received: 'Feb 1, 2024' })),
+    countingMeeting: { date: 'Feb 2, 2024', time: '6:00 PM', location: 'Clubhouse — Main Hall', observers: ['Alex Thompson', 'Sarah Chen (Secretary)', 'Robert Nguyen (Candidate)'] },
+    notices: [
+      { id: 'n6', type: 'results_publication', sentDate: 'Feb 2, 2024', recipientCount: 148, method: 'Email & Mail', status: 'sent' },
+      { id: 'n5', type: 'counting_meeting',    sentDate: 'Jan 31, 2024', recipientCount: 148, method: 'Email & Mail', status: 'sent' },
+      { id: 'n4', type: 'ballot_package',      sentDate: 'Jan 1, 2024',  recipientCount: 148, method: 'Mail',        status: 'sent' },
+      { id: 'n3', type: 'pre_ballot_notice',   sentDate: 'Dec 30, 2023', recipientCount: 148, method: 'Email & Mail', status: 'sent' },
+      { id: 'n2', type: 'nomination_reminder', sentDate: 'Nov 15, 2023', recipientCount: 148, method: 'Email & Mail', status: 'sent' },
+      { id: 'n1', type: 'call_for_nominations',sentDate: 'Sep 1, 2023',  recipientCount: 148, method: 'Email & Mail', status: 'sent' },
+    ],
+    inspectionRequests: [
+      { id: 'ir1', submittedBy: 'Robert Nguyen', unit: '4D', date: 'Feb 5, 2024', status: 'fulfilled', notes: 'Materials inspected Feb 8, 2024. Ballot secrecy preserved.' },
+    ],
+    acclamationDeclared: false,
+    adjournedMeeting: null,
+    quorumMet: true,
+    results: { totalReceived: 112, totalValid: 109, invalidBallots: 3 },
+    certifiedDate: 'Feb 2, 2024',
+    retentionStatus: 'pending_review',
+    destroyDate: 'Feb 2, 2025',
     auditLog: [
-      { id:'b4', ts:'Mar 17, 2024 3:00 PM',  action:'Results Certified', details:'Amendment passed 61-28 (68.5% yes, exceeded ⅔ threshold).', by:'Jane Ramirez', variant:'green' },
-      { id:'b3', ts:'Mar 16, 2024 9:00 AM',  action:'Results Entered',   details:'Final tally: Yes 61, No 28. 89 ballots counted.',           by:'Sarah Chen',   variant:'blue'  },
-      { id:'b2', ts:'Mar 15, 2024 11:59 PM', action:'Voting Closed',     details:'89 of 148 ballots returned (60.1% turnout).',               by:'System',       variant:'gray'  },
-      { id:'b1', ts:'Mar 1, 2024 8:00 AM',   action:'Voting Opened',     details:'Mail-in ballots dispatched to all 148 units.',              by:'System',       variant:'blue'  },
+      { id: 'a7', ts: 'Feb 2, 2024 8:00 PM',  action: 'Results Certified',   details: 'Ramirez (98), Garcia (91), Nakamura (87) elected. 3/5 certified.', by: 'Patricia Winters', variant: 'green' },
+      { id: 'a6', ts: 'Feb 2, 2024 6:00 PM',  action: 'Counting Meeting',    details: '3 observers present. 112 ballots counted, 3 invalid.', by: 'Patricia Winters', variant: 'blue' },
+      { id: 'a5', ts: 'Feb 1, 2024 11:59 PM', action: 'Voting Closed',       details: '112 of 148 ballots received (75.7% turnout). Quorum met.', by: 'System', variant: 'gray' },
+      { id: 'a4', ts: 'Jan 1, 2024 8:00 AM',  action: 'Ballots Distributed', details: '148 ballot packages mailed (paper, double-envelope system).', by: 'HOA Manager', variant: 'blue' },
+      { id: 'a3', ts: 'Dec 15, 2023 2:00 PM', action: 'Inspector Assigned',  details: 'Patricia Winters (Winters Election Services) assigned. Conflict check cleared.', by: 'HOA Manager', variant: 'violet' },
+      { id: 'a2', ts: 'Sep 1, 2023 9:00 AM',  action: 'Nominations Opened',  details: 'Call for Nominations sent to 148 members.', by: 'HOA Manager', variant: 'blue' },
+      { id: 'a1', ts: 'Aug 25, 2023 3:00 PM', action: 'Election Created',    details: 'Board election 2024 created. 3 seats. Paper voting.', by: 'HOA Manager', variant: 'gray' },
     ],
   },
   {
     id: 3,
-    title: 'Board of Directors Election 2026',
-    type: 'Board', status: 'draft', votingStatus: 'pending',
-    startDate: 'Nov 1, 2026', endDate: 'Nov 30, 2026',
-    certifiedDate: null, certifiedBy: [],
-    totalEligible: 148, votesCast: 0, seatsAvailable: 3,
-    votingMethod: 'Mail-in & Online',
-    ballotInstructions: 'Vote for up to 3 candidates. Mark the oval completely next to your choice(s). Ballots with more than 3 selections will be voided.',
-    description: 'Upcoming election for 3 board seats. Nominations open Sep 1 – Oct 15.',
-    retentionYears: 7, retentionBasis: RETENTION_BASIS.Board,
-    destroyDate: 'Nov 30, 2033', retentionStatus: 'active', retentionNotes: '',
-    candidates: [],
+    title: 'CC&R Amendment — Pet Weight Limit',
+    type: 'ccr_amendment',
+    stage: 'draft',
+    seatsAvailable: 1,
+    votingMethod: 'paper',
+    quorumRequired: true,
+    quorumPct: 67,
+    totalEligible: 148,
+    ballotsDistributed: 0,
+    ballotsReceived: 0,
+    description: 'Proposed amendment to Article VI — increase pet weight limit from 25 to 50 lbs.',
+    dates: { nominationsOpen: null, nominationReminder: null, nominationsClose: null, optInDeadline: null, preBallotNotice: null, ballotDistribution: null, votingDeadline: null, countingMeeting: null, retentionExpiry: null },
+    inspector: null,
+    candidates: [
+      { id: 1, name: 'Yes — Approve Amendment', unit: '', bio: '', eligible: true, disqualified: false, votes: 0, elected: false },
+      { id: 2, name: 'No — Reject Amendment',   unit: '', bio: '', eligible: true, disqualified: false, votes: 0, elected: false },
+    ],
+    ballotInstructions: 'Vote YES or NO. A two-thirds supermajority (67%) of votes cast is required for passage.',
+    ballotReceiptLog: [],
+    countingMeeting: { date: '', time: '', location: '', observers: [] },
+    notices: [],
+    inspectionRequests: [],
+    acclamationDeclared: false,
+    adjournedMeeting: null,
+    quorumMet: null,
+    results: null,
+    certifiedDate: null,
+    retentionStatus: 'active',
+    destroyDate: null,
     auditLog: [
-      { id:'c1', ts:'May 1, 2026 10:00 AM', action:'Ballot Created', details:'2026 board election created. Nominations open Sep 1.', by:'Sarah Chen', variant:'gray' },
+      { id: 'a1', ts: 'May 6, 2026 2:00 PM', action: 'Ballot Created', details: 'CC&R amendment ballot created. Pet weight limit increase.', by: 'HOA Manager', variant: 'gray' },
     ],
   },
 ];
 
-// ─── Small shared components ──────────────────────────────────────────────────
+// ─── Shared UI helpers ────────────────────────────────────────────────────────
+const iCls  = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
+const fLabel = 'block text-xs font-medium text-slate-500 mb-1';
+
+function SL({ children }) {
+  return <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-5 mb-2">{children}</p>;
+}
 
 function RolePill({ role }) {
   const r = ROLES[role] || { label: role, color: 'bg-slate-500' };
@@ -172,1302 +239,1139 @@ function RolePill({ role }) {
   );
 }
 
-// Shows children only if role has permission; otherwise renders a faded,
-// non-interactive wrapper with a tooltip explaining why.
 function PermGate({ role, action, tip, children }) {
   if (can(role, action)) return children;
   const needs = (PERMISSIONS[action] || []).map(r => ROLES[r]?.label || r).join(' or ');
   return (
     <div className="relative group inline-flex">
       <div className="opacity-40 pointer-events-none select-none">{children}</div>
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-lg">
-        <Lock size={7} className="inline mr-1"/>{tip || `Requires ${needs}`}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 z-50 pointer-events-none shadow-lg">
+        <Lock size={7} className="inline mr-1"/>{tip || `Requires: ${needs}`}
       </div>
     </div>
   );
 }
 
-function AuditRow({ entry }) {
-  const colors = {
-    green: 'bg-emerald-100 text-emerald-700',
-    blue:  'bg-blue-100 text-blue-700',
-    amber: 'bg-amber-100 text-amber-700',
-    red:   'bg-rose-100 text-rose-700',
-    gray:  'bg-slate-100 text-slate-600',
-  };
+function AuditRow({ e }) {
+  const c = { green:'bg-emerald-100 text-emerald-700', blue:'bg-blue-100 text-blue-700', amber:'bg-amber-100 text-amber-700', violet:'bg-violet-100 text-violet-700', gray:'bg-slate-100 text-slate-600' };
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-slate-50 last:border-0">
       <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-2 flex-shrink-0"/>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-0.5">
-          <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded', colors[entry.variant] || colors.gray)}>
-            {entry.action}
-          </span>
-          <span className="text-[11px] text-slate-400">{entry.ts}</span>
-          <span className="text-[11px] text-slate-500">by {entry.by}</span>
+          <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded', c[e.variant] || c.gray)}>{e.action}</span>
+          <span className="text-[11px] text-slate-400">{e.ts}</span>
+          <span className="text-[11px] text-slate-500">by {e.by}</span>
         </div>
-        <p className="text-xs text-slate-600">{entry.details}</p>
+        <p className="text-xs text-slate-600">{e.details}</p>
       </div>
     </div>
   );
 }
 
-// ─── Detail tabs ──────────────────────────────────────────────────────────────
-
-function OverviewTab({ ballot }) {
-  const retDays = daysUntil(ballot.destroyDate);
-  const retAlert = retDays !== null && retDays < 180;
-
+// ─── Stage Pipeline ───────────────────────────────────────────────────────────
+function StagePipeline({ stage }) {
+  const current = stageIndex(stage);
   return (
-    <div>
-      <SL>Election Details</SL>
-      <div className="grid grid-cols-2 gap-2 mb-1">
-        {[
-          ['Type',            ballot.type],
-          ['Voting Method',   ballot.votingMethod || '—'],
-          ['Seats / Choices', ballot.seatsAvailable],
-          ['Candidates',      ballot.candidates.length],
-          ['Start Date',      ballot.startDate],
-          ['End Date',        ballot.endDate],
-        ].map(([l, v]) => (
-          <div key={l} className="bg-slate-50 rounded-xl p-2.5">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider">{l}</p>
-            <p className="text-sm font-semibold text-slate-800 mt-0.5">{v}</p>
-          </div>
-        ))}
-      </div>
-
-      <SL>Turnout</SL>
-      <div className="grid grid-cols-3 gap-2 mb-1">
-        {[
-          ['Eligible', ballot.totalEligible],
-          ['Cast',     ballot.votesCast],
-          ['Turnout',  ballot.totalEligible ? `${Math.round(ballot.votesCast / ballot.totalEligible * 100)}%` : '—'],
-        ].map(([l, v]) => (
-          <div key={l} className="bg-slate-50 rounded-xl p-3 text-center">
-            <p className="text-lg font-bold text-slate-900">{v}</p>
-            <p className="text-[10px] text-slate-400">{l}</p>
-          </div>
-        ))}
-      </div>
-
-      {ballot.certifiedDate && (
-        <>
-          <SL>Certification</SL>
-          <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle size={13} className="text-emerald-600"/>
-              <span className="text-xs font-bold text-emerald-800">Certified {ballot.certifiedDate}</span>
-            </div>
-            <p className="text-[11px] text-emerald-700">Approved by: {ballot.certifiedBy.join(', ')}</p>
-          </div>
-        </>
-      )}
-
-      {ballot.status === 'certified' && ballot.candidates.length > 0 && (
-        <>
-          <SL>Final Results</SL>
-          <div className="space-y-1.5">
-            {[...ballot.candidates].sort((a, b) => b.votes - a.votes).map((c, i) => {
-              const tot = ballot.candidates.reduce((s, x) => s + x.votes, 0);
-              const pct = tot > 0 ? Math.round(c.votes / tot * 100) : 0;
-              return (
-                <div key={c.id} className={clsx('flex items-center gap-3 p-2.5 rounded-xl', c.elected ? 'bg-emerald-50 border border-emerald-100' : 'bg-slate-50')}>
-                  <span className="text-xs font-bold text-slate-400 w-4 flex-shrink-0">#{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                      <span className="text-xs font-semibold text-slate-800">{c.name}</span>
-                      {c.elected && <Badge variant="green"><Award size={9}/>Elected</Badge>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-slate-200 rounded-full h-1">
-                        <div className={clsx('h-1 rounded-full', c.elected ? 'bg-emerald-500' : 'bg-navy-500')} style={{ width: `${pct}%` }}/>
-                      </div>
-                      <span className="text-[11px] text-slate-500 flex-shrink-0 w-20 text-right">{c.votes} ({pct}%)</span>
-                    </div>
-                  </div>
+    <div className="overflow-x-auto pb-1">
+      <div className="flex items-center min-w-max gap-0">
+        {STAGES.map((s, i) => {
+          const done    = i < current;
+          const active  = i === current;
+          const future  = i > current;
+          return (
+            <div key={s.id} className="flex items-center">
+              <div className={clsx('flex flex-col items-center gap-1', future ? 'opacity-40' : '')}>
+                <div className={clsx('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border-2 transition-all',
+                  done   ? 'bg-emerald-500 border-emerald-500' :
+                  active ? 'bg-navy-600 border-navy-600' :
+                           'bg-white border-slate-300')}>
+                  {done   ? <Check size={11} className="text-white"/> :
+                   active ? <div className="w-2 h-2 rounded-full bg-white"/> :
+                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300"/>}
                 </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      <SL>Retention Summary</SL>
-      <div className={clsx('p-3 rounded-xl border', retAlert ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100')}>
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-xs font-semibold text-slate-700">
-              Destroy by: <span className={retAlert ? 'text-amber-700 font-bold' : ''}>{ballot.destroyDate}</span>
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">{ballot.retentionYears}-year retention · {ballot.retentionBasis}</p>
-          </div>
-          {retAlert && <AlertTriangle size={13} className="text-amber-500 flex-shrink-0"/>}
-        </div>
-        {retDays !== null && (
-          <p className={clsx('text-[11px] font-medium mt-1.5', retAlert ? 'text-amber-700' : 'text-slate-500')}>
-            {retDays > 0 ? `${retDays} days remaining` : 'Past retention date — review required'}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BallotPreviewTab({ ballot, role, onUpdate }) {
-  const [editingInstr, setEditingInstr] = useState(false);
-  const [instrDraft, setInstrDraft] = useState(ballot.ballotInstructions || '');
-
-  const handlePrint = () => {
-    const w = window.open('', '_blank', 'width=700,height=900');
-    const cands = ballot.candidates
-      .filter(c => c.eligible)
-      .map(c => `
-        <div class="cand">
-          <div class="bubble"></div>
-          <div>
-            <div class="cname">${c.name}</div>
-            ${c.bio ? `<div class="cbio">${c.bio}</div>` : ''}
-          </div>
-        </div>`).join('');
-    w.document.write(`<!DOCTYPE html><html><head><title>${ballot.title} — Official Ballot</title>
-      <style>
-        body{font-family:Georgia,serif;max-width:580px;margin:40px auto;padding:20px;color:#1e293b}
-        .hdr{background:#1e293b;color:#fff;padding:20px 24px;text-align:center;border-radius:4px 4px 0 0}
-        .hdr .sup{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#94a3b8}
-        .hdr h1{font-size:13px;margin:3px 0;color:#e2e8f0}
-        .hdr h2{font-size:16px;font-weight:900;margin:3px 0}
-        .hdr .dt{font-size:10px;color:#94a3b8;margin-top:4px}
-        .inst{background:#fffbeb;border-bottom:2px solid #f59e0b;padding:12px 24px}
-        .inst .lbl{font-size:9px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#92400e}
-        .inst p{font-size:11px;color:#78350f;margin:4px 0 0;line-height:1.5}
-        .body{padding:20px 24px;border:2px solid #1e293b;border-top:none}
-        .slbl{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:16px}
-        .cand{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px dotted #cbd5e1}
-        .cand:last-child{border-bottom:none}
-        .bubble{width:20px;height:20px;border-radius:50%;border:2px solid #1e293b;flex-shrink:0;margin-top:2px;background:#fff}
-        .cname{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
-        .cbio{font-size:10px;color:#64748b;font-style:italic;margin-top:3px}
-        .writein .bubble{border-color:#94a3b8}
-        .writein span{font-size:11px;color:#94a3b8;font-style:italic}
-        .ftr{background:#f8fafc;border:2px solid #1e293b;border-top:none;border-radius:0 0 4px 4px;padding:12px 24px}
-        .dash{border-top:2px dashed #94a3b8;padding-top:10px;text-align:center}
-        .dash .off{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8}
-        .fields{display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:8px}
-        .sig{font-size:10px;color:#94a3b8;margin-top:6px;text-align:center}
-        @media print{body{margin:0}}
-      </style></head><body>
-      <div class="hdr">
-        <div class="sup">Official Ballot — Confidential</div>
-        <h1>Oakwood Estates Homeowners Association</h1>
-        <h2>${ballot.title}</h2>
-        <div class="dt">Voting Period: ${ballot.startDate} – ${ballot.endDate}</div>
-      </div>
-      <div class="inst">
-        <div class="lbl">Voting Instructions</div>
-        <p>${ballot.ballotInstructions || `Vote for up to ${ballot.seatsAvailable} candidate(s).`}</p>
-      </div>
-      <div class="body">
-        <div class="slbl">${ballot.type === 'Board' ? `Board of Directors — Vote for up to ${ballot.seatsAvailable}` : ballot.type === 'Bylaw' ? 'Ballot Measure — Vote Yes or No' : ballot.type}</div>
-        ${cands}
-        <div class="cand writein">
-          <div class="bubble"></div>
-          <span>Write-in candidate: _________________________________</span>
-        </div>
-      </div>
-      <div class="ftr">
-        <div class="dash">
-          <div class="off">— Do not mark below this line — Official use only —</div>
-          <div class="fields">
-            <span>Ballot #: ___________</span>
-            <span>Unit #: ___________</span>
-            <span>Received: ___________</span>
-          </div>
-          <div class="sig">Voter Signature: _________________________________________________ Date: ___________</div>
-        </div>
-      </div>
-    </body></html>`);
-    w.document.close();
-    w.print();
-  };
-
-  const saveInstr = () => {
-    onUpdate({ ballotInstructions: instrDraft });
-    setEditingInstr(false);
-  };
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mt-1">
-        <SL>Official Ballot Preview</SL>
-        <div className="flex items-center gap-2 mb-[-4px]">
-          <PermGate role={role} action="editBallot">
-            {ballot.status === 'draft' && (
-              <button onClick={() => { setInstrDraft(ballot.ballotInstructions || ''); setEditingInstr(v => !v); }}
-                className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1">
-                <Edit2 size={11}/>{editingInstr ? 'Cancel' : 'Edit Instructions'}
-              </button>
-            )}
-          </PermGate>
-          <button onClick={handlePrint}
-            className="text-xs text-slate-700 font-medium flex items-center gap-1 px-2 py-1 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
-            <Printer size={11}/>Print
-          </button>
-        </div>
-      </div>
-
-      {editingInstr && (
-        <div className="mb-3 p-3 bg-slate-50 rounded-xl space-y-2">
-          <label className={fLabel}>Voting Instructions (printed on ballot)</label>
-          <textarea value={instrDraft} onChange={e => setInstrDraft(e.target.value)} rows={3} className={iCls}/>
-          <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={saveInstr}><Check size={11}/>Save</Button>
-            <Button variant="ghost" size="sm" onClick={() => setEditingInstr(false)}>Cancel</Button>
-          </div>
-        </div>
-      )}
-
-      {/* Ballot preview card */}
-      <div className="border-2 border-slate-700 rounded-xl overflow-hidden bg-white shadow-sm">
-        <div className="bg-slate-800 text-white px-5 py-3.5 text-center">
-          <p className="text-[9px] font-bold tracking-[0.25em] uppercase text-slate-400">Official Ballot — Confidential</p>
-          <p className="text-[11px] text-slate-300 mt-0.5">Oakwood Estates Homeowners Association</p>
-          <p className="text-sm font-black mt-0.5">{ballot.title}</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">{ballot.startDate} – {ballot.endDate}</p>
-        </div>
-
-        <div className="px-5 py-2.5 bg-amber-50 border-b-2 border-amber-300">
-          <p className="text-[9px] font-black text-amber-900 uppercase tracking-[0.2em]">Voting Instructions</p>
-          <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-            {ballot.ballotInstructions || `Vote for up to ${ballot.seatsAvailable} candidate(s).`}
-          </p>
-        </div>
-
-        <div className="px-5 py-4">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-2 mb-3">
-            {ballot.type === 'Board'
-              ? `Board of Directors — Vote for up to ${ballot.seatsAvailable} Candidate${ballot.seatsAvailable > 1 ? 's' : ''}`
-              : ballot.type === 'Bylaw' ? 'Ballot Measure — Vote Yes or No' : ballot.type}
-          </p>
-          {ballot.candidates.filter(c => c.eligible).length === 0
-            ? <p className="text-xs text-slate-400 italic text-center py-4">No eligible candidates added yet</p>
-            : (
-              <div className="space-y-3">
-                {ballot.candidates.filter(c => c.eligible).map(c => (
-                  <div key={c.id} className="flex items-start gap-3.5">
-                    <div className="w-5 h-5 rounded-full border-2 border-slate-700 flex-shrink-0 mt-0.5 bg-white"/>
-                    <div className="flex-1 border-b border-dotted border-slate-200 pb-2.5">
-                      <p className="text-xs font-black text-slate-900 uppercase tracking-wide">{c.name}</p>
-                      {c.bio && <p className="text-[11px] text-slate-500 italic mt-0.5">{c.bio}</p>}
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-start gap-3.5">
-                  <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex-shrink-0 mt-0.5 bg-white"/>
-                  <p className="text-[11px] text-slate-400 italic pb-2.5 border-b border-dotted border-slate-200 flex-1">
-                    Write-in candidate: _________________________________
-                  </p>
-                </div>
+                <p className={clsx('text-[9px] font-medium text-center w-16 leading-tight',
+                  active ? 'text-navy-700 font-bold' : done ? 'text-emerald-700' : 'text-slate-400')}>
+                  {s.label}
+                </p>
               </div>
-            )
-          }
-        </div>
-
-        <div className="px-5 py-3 bg-slate-50 border-t-2 border-slate-200">
-          <div className="border-t-2 border-dashed border-slate-300 pt-2.5 text-center">
-            <p className="text-[8px] text-slate-400 uppercase tracking-[0.2em]">— Do not mark below this line — Official use only —</p>
-            <div className="flex justify-between mt-2 text-[10px] text-slate-400">
-              <span>Ballot #: __________</span>
-              <span>Unit #: __________</span>
-              <span>Received: __________</span>
+              {i < STAGES.length - 1 && (
+                <div className={clsx('w-8 h-0.5 mb-4 flex-shrink-0', i < current ? 'bg-emerald-400' : 'bg-slate-200')}/>
+              )}
             </div>
-            <p className="text-[10px] text-slate-400 mt-1.5">
-              Voter Signature: _________________________________ Date: __________
-            </p>
-          </div>
-        </div>
+          );
+        })}
       </div>
-      <p className="text-[10px] text-slate-400 mt-2 text-center">
-        Voting method: <span className="font-medium">{ballot.votingMethod || 'Not specified'}</span>
-        {ballot.candidates.some(c => !c.eligible) && (
-          <span className="text-amber-600"> · {ballot.candidates.filter(c => !c.eligible).length} ineligible candidate(s) hidden</span>
-        )}
-      </p>
     </div>
   );
 }
 
-function CandidatesTab({ ballot, role, onUpdate, addAudit }) {
-  const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState({ name: '', bio: '', eligible: true });
+// ─── TABS ─────────────────────────────────────────────────────────────────────
 
-  const add = () => {
+function OverviewTab({ election, role, onUpdate, addAudit }) {
+  const quorumNeeded = election.quorumRequired ? Math.ceil(election.totalEligible * election.quorumPct / 100) : 0;
+  const quorumPct    = election.totalEligible ? Math.round(election.ballotsReceived / election.totalEligible * 100) : 0;
+  const quorumMet    = !election.quorumRequired || election.ballotsReceived >= quorumNeeded;
+
+  // Acclamation check (AB 502)
+  const eligibleCandidates = election.candidates.filter(c => c.eligible && !c.disqualified).length;
+  const nomDays = daysBetween(election.dates.nominationsOpen, election.dates.nominationsClose);
+  const hasReminder = election.notices.some(n => n.type === 'nomination_reminder' && n.status === 'sent');
+  const hadRecentElection = true; // seed: true for demo
+  const acclamationConditions = [
+    { label: 'Qualified candidates ≤ open seats',          met: eligibleCandidates <= election.seatsAvailable && eligibleCandidates > 0 },
+    { label: 'Nomination period was at least 90 days',     met: nomDays !== null && nomDays >= 90 },
+    { label: 'Nomination Reminder sent (7–30 days before close)', met: hasReminder },
+    { label: 'HOA held secret ballot election in past 4 years',  met: hadRecentElection },
+  ];
+  const canAcclaim = acclamationConditions.every(c => c.met) && election.type === 'board_director';
+
+  const nextStageId = STAGES[stageIndex(election.stage) + 1]?.id;
+
+  return (
+    <div>
+      <SL>Election Pipeline</SL>
+      <StagePipeline stage={election.stage}/>
+
+      {canAcclaim && !election.acclamationDeclared && (
+        <div className="mt-4 p-4 bg-emerald-50 border-2 border-emerald-300 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <Award size={14} className="text-emerald-600"/>
+            <p className="text-sm font-bold text-emerald-800">Election by Acclamation Available (AB 502)</p>
+          </div>
+          <p className="text-xs text-emerald-700 mb-3">All 4 AB 502 conditions are met. The board may declare results without a full ballot election.</p>
+          <div className="space-y-1 mb-3">
+            {acclamationConditions.map(c => (
+              <div key={c.label} className="flex items-center gap-2 text-xs text-emerald-700">
+                <CheckCircle size={11}/>{c.label}
+              </div>
+            ))}
+          </div>
+          <PermGate role={role} action="advanceStage">
+            <Button variant="success" size="sm" onClick={() => {
+              onUpdate({ acclamationDeclared: true, stage: 'results_certified', certifiedDate: nowStr() });
+              addAudit('Acclamation Declared', `Election by Acclamation declared per AB 502. ${eligibleCandidates} candidate(s) elected without ballot election.`, 'green');
+            }}>
+              <Award size={12}/>Declare Election by Acclamation
+            </Button>
+          </PermGate>
+        </div>
+      )}
+      {election.acclamationDeclared && (
+        <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <div className="flex items-center gap-2"><Award size={13} className="text-emerald-600"/><span className="text-xs font-bold text-emerald-800">Election by Acclamation declared {election.certifiedDate}</span></div>
+        </div>
+      )}
+
+      <SL>Quorum Tracker</SL>
+      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 mb-2">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-bold text-slate-700">{election.quorumRequired ? `${election.quorumPct}% quorum required` : 'No quorum required'}</p>
+          <Badge variant={quorumMet ? 'green' : 'amber'}>{quorumMet ? 'Quorum Met' : 'Not Yet Met'}</Badge>
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex-1 bg-slate-200 rounded-full h-2">
+            <div className={clsx('h-2 rounded-full transition-all', quorumMet ? 'bg-emerald-500' : 'bg-amber-400')} style={{ width: `${Math.min(100, quorumPct)}%` }}/>
+          </div>
+          <span className="text-xs text-slate-600 font-medium">{election.ballotsReceived} / {election.totalEligible}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          {[['Eligible', election.totalEligible], ['Received', election.ballotsReceived], ['Needed', election.quorumRequired ? quorumNeeded : '—']].map(([l, v]) => (
+            <div key={l} className="bg-white rounded-lg p-2 border border-slate-100">
+              <p className="text-base font-bold text-slate-900">{v}</p>
+              <p className="text-[10px] text-slate-400">{l}</p>
+            </div>
+          ))}
+        </div>
+        {!quorumMet && election.stage === 'counting_scheduled' && (
+          <div className="mt-3 p-2.5 bg-amber-50 rounded-lg border border-amber-200">
+            <p className="text-xs font-bold text-amber-800">AB 1458 Adjournment Available</p>
+            <p className="text-xs text-amber-700 mt-0.5">If quorum not met, adjourn ≥20 days. Quorum drops to 20% at reconvened meeting.</p>
+            <PermGate role={role} action="advanceStage">
+              <Button variant="secondary" size="sm" className="mt-2" onClick={() => {
+                onUpdate({ adjournedMeeting: { newQuorumPct: 20, noticeSent: false } });
+                addAudit('Quorum Adjournment', 'Meeting adjourned per AB 1458. Quorum reduced to 20% for reconvened meeting.', 'amber');
+              }}>
+                <Calendar size={11}/>Initiate Adjournment
+              </Button>
+            </PermGate>
+          </div>
+        )}
+      </div>
+
+      <SL>Key Dates</SL>
+      <div className="space-y-1.5">
+        {Object.entries({
+          'Nominations Open':   election.dates.nominationsOpen,
+          'Nominations Close':  election.dates.nominationsClose,
+          'Inspector Assigned': election.inspector?.assignedDate,
+          'Ballot Distribution':election.dates.ballotDistribution,
+          'Voting Deadline':    election.dates.votingDeadline,
+          'Counting Meeting':   election.dates.countingMeeting,
+          'Retention Expires':  election.dates.retentionExpiry,
+        }).map(([l, v]) => v && (
+          <div key={l} className="flex justify-between py-1.5 border-b border-slate-50 last:border-0">
+            <span className="text-xs text-slate-500">{l}</span>
+            <span className="text-xs font-semibold text-slate-800">{v}</span>
+          </div>
+        ))}
+      </div>
+
+      {can(role, 'advanceStage') && nextStageId && election.stage !== 'archived' && (
+        <div className="mt-4">
+          <Button variant="primary" size="sm" onClick={() => {
+            onUpdate({ stage: nextStageId });
+            addAudit('Stage Advanced', `Election moved to: ${STAGES.find(s => s.id === nextStageId)?.label}.`, 'blue');
+          }}>
+            <Check size={12}/>Advance to: {STAGES.find(s => s.id === nextStageId)?.label}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineTab({ election }) {
+  const deadlines = [
+    { label: 'Call for Nominations sent',                          legal: '§ 5115',       date: election.dates.nominationsOpen,   done: stageIndex(election.stage) > 1,  required: ['board_director', 'recall'] },
+    { label: 'Nomination period ≥ 90 days',                       legal: '§ 5115',       date: election.dates.nominationsClose,  done: stageIndex(election.stage) > 2,  required: ['board_director', 'recall'], check: daysBetween(election.dates.nominationsOpen, election.dates.nominationsClose) >= 90 || stageIndex(election.stage) < 2, warn: daysBetween(election.dates.nominationsOpen, election.dates.nominationsClose) < 90 },
+    { label: 'Nomination Reminder sent (7–30 days before close)', legal: '§ 5115',       date: election.dates.nominationReminder,done: election.notices.some(n => n.type === 'nomination_reminder'), required: ['board_director', 'recall'] },
+    { label: 'Electronic voting opt-in period opens (90 days out)',legal: '§ 5260',       date: election.dates.optInDeadline,     done: stageIndex(election.stage) > 1,  required: election.votingMethod !== 'paper' ? ['board_director', 'recall', 'ccr_amendment'] : [] },
+    { label: 'Inspector assigned (before ballot distribution)',   legal: '§ 5110',       date: election.inspector?.assignedDate, done: !!election.inspector,            required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+    { label: 'Pre-Ballot Notice sent (≥30 days before ballots)',  legal: '§ 5115',       date: election.dates.preBallotNotice,   done: election.notices.some(n => n.type === 'pre_ballot_notice'), required: ['board_director', 'recall', 'assessment', 'ccr_amendment'], check: daysBetween(election.dates.preBallotNotice, election.dates.ballotDistribution) >= 30, warn: daysBetween(election.dates.preBallotNotice, election.dates.ballotDistribution) < 30 },
+    { label: 'Ballots distributed (≥30 days before deadline)',    legal: '§ 5115',       date: election.dates.ballotDistribution,done: stageIndex(election.stage) > 4,  required: ['board_director', 'recall', 'assessment', 'ccr_amendment'], check: daysBetween(election.dates.ballotDistribution, election.dates.votingDeadline) >= 30, warn: daysBetween(election.dates.ballotDistribution, election.dates.votingDeadline) < 30 },
+    { label: 'Voting deadline',                                   legal: '§ 5100',       date: election.dates.votingDeadline,    done: stageIndex(election.stage) > 5,  required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+    { label: 'Ballot counting meeting (public)',                   legal: '§ 5120',       date: election.dates.countingMeeting,   done: stageIndex(election.stage) > 6,  required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+    { label: 'Results certified & published',                     legal: '§ 5120',       date: election.certifiedDate,           done: !!election.certifiedDate,        required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+    { label: 'Election materials retention period (1 year)',       legal: '§ 5120, 5125', date: election.dates.retentionExpiry,   done: false,                           required: ['board_director', 'recall', 'assessment', 'ccr_amendment'] },
+  ].filter(d => !d.required.length || d.required.includes(election.type));
+
+  return (
+    <div>
+      <SL>Legal Timeline — Davis-Stirling Act</SL>
+      <p className="text-xs text-slate-500 mb-3">Minimum 105-day election process for board elections. Compliance flags shown in amber.</p>
+      <div className="space-y-1.5">
+        {deadlines.map((d, i) => {
+          const days  = daysUntil(d.date);
+          const hasWarn = d.warn === true;
+          return (
+            <div key={i} className={clsx('flex items-start gap-3 p-2.5 rounded-xl', hasWarn ? 'bg-amber-50 border border-amber-200' : d.done ? 'bg-emerald-50 border border-emerald-100' : 'bg-slate-50 border border-slate-100')}>
+              <div className="mt-0.5 flex-shrink-0">
+                {hasWarn ? <AlertTriangle size={13} className="text-amber-500"/> :
+                 d.done  ? <CheckCircle  size={13} className="text-emerald-500"/> :
+                           <Clock        size={13} className="text-slate-400"/>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={clsx('text-xs font-semibold', hasWarn ? 'text-amber-800' : d.done ? 'text-emerald-800' : 'text-slate-700')}>{d.label}</span>
+                  <span className="text-[10px] text-slate-400">{d.legal}</span>
+                </div>
+                {hasWarn && <p className="text-[11px] text-amber-700 mt-0.5">⚠ Timeline gap may not meet legal minimum — review required.</p>}
+              </div>
+              <div className="text-right flex-shrink-0">
+                {d.date && <p className="text-xs font-medium text-slate-700">{d.date}</p>}
+                {days !== null && !d.done && <p className={clsx('text-[11px]', days < 0 ? 'text-rose-600 font-bold' : days < 14 ? 'text-amber-600' : 'text-slate-400')}>{days < 0 ? `${Math.abs(days)}d overdue` : `${days}d away`}</p>}
+                {d.done && <p className="text-[11px] text-emerald-600">Complete</p>}
+                {!d.date && <p className="text-[11px] text-slate-400">Not set</p>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NominationsTab({ election, role, onUpdate, addAudit }) {
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState({ name: '', unit: '', bio: '', eligible: true });
+  const eligible = election.candidates.filter(c => c.eligible && !c.disqualified);
+
+  const addCandidate = () => {
     if (!draft.name.trim()) return;
-    const c = { ...draft, id: Date.now(), votes: 0, elected: false };
-    onUpdate({ candidates: [...ballot.candidates, c] });
-    addAudit('Candidate Added', `"${draft.name}" added to ballot${!draft.eligible ? ' (marked ineligible)' : ''}.`, 'blue');
-    setDraft({ name: '', bio: '', eligible: true });
+    const c = { ...draft, id: Date.now(), disqualified: !draft.eligible, votes: 0, elected: false };
+    onUpdate({ candidates: [...election.candidates, c] });
+    addAudit('Candidate Added', `${draft.name} (Unit ${draft.unit}) nominated. Eligibility: ${draft.eligible ? 'verified' : 'pending'}.`, 'blue');
+    setDraft({ name: '', unit: '', bio: '', eligible: true });
     setShowForm(false);
   };
 
-  const remove = id => {
-    const c = ballot.candidates.find(x => x.id === id);
-    onUpdate({ candidates: ballot.candidates.filter(x => x.id !== id) });
-    addAudit('Candidate Removed', `"${c?.name}" removed from ballot.`, 'amber');
+  const disqualify = id => {
+    const c = election.candidates.find(x => x.id === id);
+    onUpdate({ candidates: election.candidates.map(x => x.id === id ? { ...x, disqualified: !x.disqualified } : x) });
+    addAudit('Eligibility Updated', `${c?.name} marked ${c?.disqualified ? 'eligible' : 'disqualified (AB 1764)'}.`, 'amber');
   };
 
-  const toggleEligible = id => {
-    const c = ballot.candidates.find(x => x.id === id);
-    onUpdate({ candidates: ballot.candidates.map(x => x.id === id ? { ...x, eligible: !x.eligible } : x) });
-    addAudit('Eligibility Updated', `"${c?.name}" marked ${c?.eligible ? 'ineligible' : 'eligible'}.`, 'amber');
-  };
+  const canAcclaim = eligible.length <= election.seatsAvailable && eligible.length > 0;
 
   return (
     <div>
+      {canAcclaim && (
+        <div className="mt-1 mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <div className="flex items-center gap-2">
+            <Award size={13} className="text-emerald-600"/>
+            <p className="text-xs font-bold text-emerald-800">Acclamation conditions may be met — {eligible.length} candidate(s), {election.seatsAvailable} seat(s)</p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mt-1">
-        <SL>Candidates / Ballot Options ({ballot.candidates.length})</SL>
-        <PermGate role={role} action="addCandidate">
-          {ballot.status === 'draft' && (
-            <button onClick={() => setShowForm(v => !v)}
-              className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 mb-[-4px]">
-              <Plus size={11}/>Add
-            </button>
-          )}
+        <SL>Candidates ({election.candidates.length})</SL>
+        <PermGate role={role} action="manageNominations">
+          <button onClick={() => setShowForm(v => !v)}
+            className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 mb-[-4px]">
+            <Plus size={11}/>Add Candidate
+          </button>
         </PermGate>
       </div>
 
       {showForm && (
         <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2">
-          <div>
-            <label className={fLabel}>Name *</label>
-            <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-              className={iCls} placeholder="Full name or ballot option"/>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Full Name *</label><input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} className={iCls} placeholder="Jane Smith"/></div>
+            <div><label className={fLabel}>Unit #</label><input value={draft.unit} onChange={e => setDraft(d => ({ ...d, unit: e.target.value }))} className={iCls} placeholder="12A"/></div>
           </div>
-          <div>
-            <label className={fLabel}>Bio / Statement</label>
-            <textarea value={draft.bio} onChange={e => setDraft(d => ({ ...d, bio: e.target.value }))}
-              rows={2} className={iCls} placeholder="Candidate statement (optional)"/>
-          </div>
+          <div><label className={fLabel}>Candidate Statement</label><textarea value={draft.bio} onChange={e => setDraft(d => ({ ...d, bio: e.target.value }))} rows={2} className={iCls} placeholder="Brief statement for ballot package..."/></div>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={draft.eligible} onChange={e => setDraft(d => ({ ...d, eligible: e.target.checked }))}
-              className="rounded border-slate-300"/>
-            <span className="text-xs text-slate-600">Eligibility verified</span>
+            <input type="checkbox" checked={draft.eligible} onChange={e => setDraft(d => ({ ...d, eligible: e.target.checked }))} className="rounded"/>
+            <span className="text-xs text-slate-600">Eligibility verified (per AB 1764 and HOA bylaws)</span>
           </label>
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={add}><Check size={11}/>Add</Button>
+            <Button variant="primary" size="sm" onClick={addCandidate}><Check size={11}/>Add</Button>
             <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
           </div>
         </div>
       )}
 
-      {ballot.candidates.length === 0 && !showForm
-        ? <p className="text-sm text-slate-400 italic text-center py-8">No candidates added yet</p>
-        : (
-          <div className="space-y-2">
-            {ballot.candidates.map((c, i) => (
-              <div key={c.id}
-                className={clsx('p-3 border rounded-xl transition-colors',
-                  c.elected ? 'border-emerald-200 bg-emerald-50'
-                    : !c.eligible ? 'border-amber-200 bg-amber-50'
-                    : 'border-slate-100')}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <div className="w-5 h-5 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">{i + 1}</div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                        <span className="text-sm font-semibold text-slate-800">{c.name}</span>
-                        {c.elected && <Badge variant="green"><Award size={9}/>Elected</Badge>}
-                        {!c.eligible && <Badge variant="amber"><AlertTriangle size={9}/>Ineligible</Badge>}
-                        {c.eligible && !c.elected && ballot.status === 'draft' && <Badge variant="blue">Eligible</Badge>}
-                      </div>
-                      {c.bio && <p className="text-xs text-slate-500">{c.bio}</p>}
-                      {ballot.status === 'certified' && (
-                        <p className="text-xs font-bold text-slate-700 mt-1">{c.votes} votes</p>
-                      )}
+      <div className="mb-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+        <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1">AB 1764 — Disqualification Criteria</p>
+        <div className="text-[11px] text-blue-700 space-y-0.5">
+          {['Delinquent in assessments', 'Convicted of a felony involving dishonesty', 'Violated HOA rules (within 1 year)', 'Does not own or reside in the community (per bylaws)', 'Nominated after close of nominations'].map(r => (
+            <div key={r} className="flex items-center gap-1"><XCircle size={9}/>{r}</div>
+          ))}
+        </div>
+      </div>
+
+      {election.candidates.length === 0 ? (
+        <p className="text-sm text-slate-400 italic text-center py-6">No candidates submitted yet</p>
+      ) : (
+        <div className="space-y-2">
+          {election.candidates.map((c, i) => (
+            <div key={c.id} className={clsx('p-3 border rounded-xl', c.disqualified ? 'border-rose-200 bg-rose-50' : c.elected ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100')}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div className="w-5 h-5 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">{i + 1}</div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                      <span className="text-sm font-semibold text-slate-800">{c.name}</span>
+                      {c.unit && <span className="text-[11px] text-slate-400">Unit {c.unit}</span>}
+                      {c.elected    && <Badge variant="green"><Award size={9}/>Elected</Badge>}
+                      {c.disqualified && <Badge variant="red"><XCircle size={9}/>Disqualified</Badge>}
+                      {!c.disqualified && !c.elected && <Badge variant="blue">Eligible</Badge>}
                     </div>
+                    {c.bio && <p className="text-xs text-slate-500 italic">{c.bio}</p>}
+                    {election.stage === 'archived' && c.votes !== undefined && (
+                      <p className="text-xs font-bold text-slate-700 mt-1">{c.votes} votes</p>
+                    )}
                   </div>
-                  {ballot.status === 'draft' && (
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button onClick={() => toggleEligible(c.id)}
-                        className={clsx('text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors',
-                          c.eligible ? 'text-amber-600 hover:bg-amber-100' : 'text-emerald-600 hover:bg-emerald-100')}>
-                        {c.eligible ? 'Mark Ineligible' : 'Mark Eligible'}
-                      </button>
-                      <button onClick={() => remove(c.id)} className="text-slate-300 hover:text-rose-500 transition-colors">
-                        <Trash2 size={13}/>
-                      </button>
-                    </div>
-                  )}
                 </div>
+                {can(role, 'manageNominations') && election.stage !== 'archived' && (
+                  <button onClick={() => disqualify(c.id)}
+                    className={clsx('text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors flex-shrink-0', c.disqualified ? 'text-emerald-600 hover:bg-emerald-100' : 'text-rose-600 hover:bg-rose-100')}>
+                    {c.disqualified ? 'Reinstate' : 'Disqualify'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[11px] text-slate-400 mt-3">
+        {election.type === 'board_director' ? `Floor nominations prohibited when electronic ballots are in use (Civil Code § 5105).` : ''}
+      </p>
+    </div>
+  );
+}
+
+function InspectorTab({ election, role, onUpdate, addAudit }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', firm: '', contact: '', conflictChecked: false, declaration: '' });
+  const [showReceiptLog, setShowReceiptLog] = useState(false);
+  const [receiptUnit, setReceiptUnit] = useState('');
+
+  const assign = () => {
+    if (!form.name.trim() || !form.conflictChecked) return;
+    const ins = { ...form, assignedDate: nowStr(), loginExpiry: election.dates.retentionExpiry };
+    onUpdate({ inspector: ins, stage: stageIndex(election.stage) <= 2 ? 'inspector_assigned' : election.stage });
+    addAudit('Inspector Assigned', `${form.name} (${form.firm || 'Independent'}) assigned. Conflict-of-interest declaration recorded.`, 'violet');
+    setShowForm(false);
+  };
+
+  const logReceipt = () => {
+    if (!receiptUnit.trim()) return;
+    const entry = { unit: receiptUnit, received: nowStr(), id: Date.now() };
+    onUpdate({ ballotReceiptLog: [...(election.ballotReceiptLog || []), entry], ballotsReceived: (election.ballotsReceived || 0) + 1 });
+    addAudit('Ballot Receipt Logged', `Outer envelope received from Unit ${receiptUnit}. Inner ballot envelope not opened.`, 'gray');
+    setReceiptUnit('');
+  };
+
+  const conflictChecklist = [
+    'Not a current director of the HOA',
+    'Not a candidate for director in this election',
+    'Not related to a director or candidate',
+    'Not currently employed by or under contract with the HOA (other than as Inspector)',
+    'Not affiliated with the HOA management company',
+  ];
+
+  return (
+    <div>
+      <SL>Inspector of Elections</SL>
+      {!election.inspector ? (
+        <div>
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-3">
+            <div className="flex items-center gap-2 mb-1"><AlertTriangle size={12} className="text-amber-600"/><p className="text-xs font-bold text-amber-800">Inspector must be assigned before ballots are distributed (Civil Code § 5110)</p></div>
+            <p className="text-[11px] text-amber-700">May be an individual or firm (notary, CPA, attorney, or professional election service). Appointed by the board after close of nominations.</p>
+          </div>
+          <PermGate role={role} action="assignInspector">
+            <Button variant="primary" size="sm" onClick={() => setShowForm(true)}><UserCheck size={12}/>Assign Inspector</Button>
+          </PermGate>
+          {showForm && (
+            <div className="mt-3 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <p className="text-xs font-bold text-slate-700">Inspector Assignment</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className={fLabel}>Inspector Name *</label><input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={iCls} placeholder="Patricia Winters"/></div>
+                <div><label className={fLabel}>Firm / Organization</label><input value={form.firm} onChange={e => setForm(p => ({ ...p, firm: e.target.value }))} className={iCls} placeholder="Winters Election Services"/></div>
+              </div>
+              <div><label className={fLabel}>Contact</label><input value={form.contact} onChange={e => setForm(p => ({ ...p, contact: e.target.value }))} className={iCls} placeholder="email or phone"/></div>
+              <div>
+                <label className={fLabel}>Conflict-of-Interest Declaration</label>
+                <p className="text-[11px] text-slate-500 mb-2">Inspector must confirm ALL of the following (Civil Code § 5110):</p>
+                <div className="space-y-1.5">
+                  {conflictChecklist.map(item => (
+                    <div key={item} className="flex items-center gap-2 text-xs text-slate-600"><CheckCircle size={11} className="text-emerald-500 flex-shrink-0"/>{item}</div>
+                  ))}
+                </div>
+                <label className="flex items-center gap-2 mt-3 cursor-pointer p-2 bg-white rounded-lg border border-slate-200">
+                  <input type="checkbox" checked={form.conflictChecked} onChange={e => setForm(p => ({ ...p, conflictChecked: e.target.checked }))} className="rounded"/>
+                  <span className="text-xs font-medium text-slate-700">Inspector confirms all 5 conditions above — no conflicts of interest</span>
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="primary" size="sm" onClick={assign} disabled={!form.conflictChecked || !form.name}><Check size={11}/>Assign Inspector</Button>
+                <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl mb-4">
+            <div className="flex items-center gap-2 mb-2"><UserCheck size={14} className="text-violet-600"/><span className="text-sm font-bold text-violet-800">{election.inspector.name}</span><Badge variant="blue">Assigned</Badge></div>
+            {election.inspector.firm    && <p className="text-xs text-violet-700">{election.inspector.firm}</p>}
+            {election.inspector.contact && <p className="text-xs text-violet-600">{election.inspector.contact}</p>}
+            <div className="mt-2 space-y-0.5 text-[11px] text-violet-700">
+              <p>Assigned: {election.inspector.assignedDate}</p>
+              <p>Login active until: {election.inspector.loginExpiry || election.dates.retentionExpiry || '—'} (1-year retention period)</p>
+              {election.inspector.conflictChecked && <p className="flex items-center gap-1"><CheckCircle size={10}/>Conflict-of-interest declaration on file</p>}
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 mb-4">
+            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-2">Inspector Responsibilities (Civil Code § 5110)</p>
+            {[
+              ['Receive and securely store all ballots', true],
+              ['Maintain and verify voter eligibility list', !!election.inspector],
+              ['Log ballot receipt per unit (outer envelope only)', (election.ballotReceiptLog||[]).length > 0],
+              ['Conduct public ballot-counting meeting', stageIndex(election.stage) >= 6],
+              ['Certify and announce official results', !!election.certifiedDate],
+              ['Retain election materials for 1 year post-election', !!election.certifiedDate],
+            ].map(([l, done]) => (
+              <div key={l} className="flex items-center gap-2 py-1">
+                <div className={clsx('w-4 h-4 rounded flex items-center justify-center flex-shrink-0', done ? 'bg-emerald-500' : 'bg-slate-200')}>
+                  {done && <Check size={9} className="text-white"/>}
+                </div>
+                <span className={clsx('text-xs', done ? 'text-slate-700' : 'text-slate-400')}>{l}</span>
               </div>
             ))}
           </div>
-        )
-      }
 
-      {ballot.candidates.some(c => !c.eligible) && (
-        <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-          <AlertTriangle size={11}/>Ineligible candidates are hidden on the printed ballot.
-        </p>
+          <SL>Ballot Receipt Log</SL>
+          <PermGate role={role} action="viewBallotReceiptLog" tip="Inspector of Elections access only">
+            <div>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 mb-3">
+                <p className="text-[11px] text-amber-800 font-medium">
+                  ⚠ Inspector logs receipt of <strong>outer (signed) envelopes only</strong>. Inner ballot envelopes must NOT be opened before the counting meeting (Civil Code § 5120).
+                </p>
+              </div>
+              <div className="flex gap-2 mb-3">
+                <input value={receiptUnit} onChange={e => setReceiptUnit(e.target.value)} onKeyDown={e => e.key === 'Enter' && logReceipt()}
+                  placeholder="Unit # (e.g. 12A)" className={iCls + ' text-xs py-1.5'}/>
+                <Button variant="primary" size="sm" onClick={logReceipt}><Check size={11}/>Log Receipt</Button>
+              </div>
+              <p className="text-xs text-slate-500 mb-2">{(election.ballotReceiptLog || []).length} of {election.totalEligible} outer envelopes received</p>
+              {(election.ballotReceiptLog || []).slice(0, 8).map(r => (
+                <div key={r.id || r.unit} className="flex justify-between py-1 text-xs border-b border-slate-50 last:border-0">
+                  <span className="text-slate-700 font-medium">Unit {r.unit}</span>
+                  <span className="text-slate-400">{r.received}</span>
+                </div>
+              ))}
+              {(election.ballotReceiptLog || []).length > 8 && <p className="text-[11px] text-slate-400 mt-1">…and {election.ballotReceiptLog.length - 8} more</p>}
+            </div>
+          </PermGate>
+        </div>
       )}
     </div>
   );
 }
 
-function VotingTab({ ballot, role, onUpdate, addAudit }) {
-  const eligible = ballot.candidates.filter(c => c.eligible);
-  const ready = eligible.length > 0 && ballot.ballotInstructions?.trim();
-  const pct = ballot.totalEligible ? Math.round(ballot.votesCast / ballot.totalEligible * 100) : 0;
-
-  const openVoting = () => {
-    onUpdate({ votingStatus: 'open', status: 'active' });
-    addAudit('Voting Opened', `Voting period activated. ${ballot.totalEligible} eligible voters. Method: ${ballot.votingMethod}.`, 'blue');
-  };
-
-  const closeVoting = () => {
-    onUpdate({ votingStatus: 'closed' });
-    addAudit('Voting Closed', `Voting period ended. ${ballot.votesCast} ballots received (${pct}% turnout). Results entry now unlocked.`, 'gray');
-  };
-
-  const updateCast = val => onUpdate({ votesCast: Math.max(0, Math.min(ballot.totalEligible, Number(val) || 0)) });
-
-  return (
-    <div>
-      <SL>Voting Period</SL>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <div className="p-3 bg-slate-50 rounded-xl">
-          <p className={fLabel}>Scheduled Start</p>
-          <p className="text-sm font-semibold text-slate-800">{ballot.startDate}</p>
-        </div>
-        <div className="p-3 bg-slate-50 rounded-xl">
-          <p className={fLabel}>Scheduled End</p>
-          <p className="text-sm font-semibold text-slate-800">{ballot.endDate}</p>
-        </div>
-      </div>
-
-      <div className="p-4 border-2 rounded-xl mb-4 border-slate-200">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-sm font-bold text-slate-800">Current Status</p>
-            <p className="text-xs text-slate-400 mt-0.5">{ballot.votingMethod}</p>
-          </div>
-          <Badge variant={ballot.votingStatus === 'open' ? 'green' : ballot.votingStatus === 'closed' ? 'gray' : 'blue'}>
-            {ballot.votingStatus === 'open' ? <Unlock size={10}/> : <Lock size={10}/>}
-            {ballot.votingStatus === 'open' ? 'Voting Open' : ballot.votingStatus === 'closed' ? 'Closed' : 'Pending'}
-          </Badge>
-        </div>
-
-        {ballot.votingStatus !== 'pending' && (
-          <div className="mb-3">
-            <div className="flex justify-between text-xs text-slate-500 mb-1">
-              <span>Ballots received</span>
-              <span>{ballot.votesCast} / {ballot.totalEligible} ({pct}%)</span>
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-2">
-              <div className="bg-navy-600 h-2 rounded-full transition-all" style={{ width: `${pct}%` }}/>
-            </div>
-            {ballot.votingStatus === 'open' && (
-              <div className="mt-2">
-                <label className={fLabel}>Update Ballots Received</label>
-                <input type="number" value={ballot.votesCast} onChange={e => updateCast(e.target.value)}
-                  className={iCls} min="0" max={ballot.totalEligible}/>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex gap-2 flex-wrap">
-          <PermGate role={role} action="openVoting">
-            <Button variant="primary" size="sm" onClick={openVoting}
-              disabled={ballot.votingStatus !== 'pending' || !ready}>
-              <Unlock size={11}/>Open Voting
-            </Button>
-          </PermGate>
-          <PermGate role={role} action="closeVoting">
-            <Button variant="secondary" size="sm" onClick={closeVoting}
-              disabled={ballot.votingStatus !== 'open'}>
-              <Lock size={11}/>Close Voting
-            </Button>
-          </PermGate>
-        </div>
-
-        {!ready && ballot.votingStatus === 'pending' && (
-          <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-            <AlertTriangle size={11}/>Add eligible candidates and ballot instructions before opening.
-          </p>
-        )}
-      </div>
-
-      <SL>Ballot Tracker</SL>
-      {ballot.votingStatus === 'pending'
-        ? <p className="text-sm text-slate-400 italic">Tracking begins once voting is opened.</p>
-        : (
-          <div className="space-y-2">
-            {[
-              { label: 'Ballots Distributed', value: ballot.totalEligible, icon: FileText },
-              { label: 'Returned',            value: ballot.votesCast,     icon: CheckCircle },
-              { label: 'Outstanding',          value: ballot.totalEligible - ballot.votesCast, icon: Clock },
-            ].map(({ label, value, icon: Icon }) => (
-              <div key={label} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center flex-shrink-0 border border-slate-200">
-                  <Icon size={14} className="text-slate-500"/>
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-semibold text-slate-800">{label}</p>
-                </div>
-                <span className="text-base font-bold text-slate-900">{value}</span>
-              </div>
-            ))}
-          </div>
-        )
-      }
-    </div>
-  );
-}
-
-function ResultsTab({ ballot, role, onUpdate, addAudit }) {
-  const [votes, setVotes] = useState(() =>
-    Object.fromEntries(ballot.candidates.map(c => [c.id, c.votes || 0]))
-  );
-  const [totalCast, setTotalCast] = useState(ballot.votesCast || 0);
-  const [saved, setSaved] = useState(false);
-  const [certStep, setCertStep] = useState(0);
-  const [approvals, setApprovals] = useState(ballot.certifiedBy || []);
+function CountingTab({ election, role, onUpdate, addAudit }) {
+  const [votes, setVotes] = useState(() => Object.fromEntries(election.candidates.map(c => [c.id, c.votes || 0])));
+  const [totalCast, setTotalCast] = useState(election.ballotsReceived || 0);
+  const [totalValid, setTotalValid] = useState(election.results?.totalValid || 0);
+  const [observer, setObserver] = useState('');
+  const [approvals, setApprovals] = useState(election.certifiedDate ? ['Certified'] : []);
   const [approverName, setApproverName] = useState('');
+  const [certStep, setCertStep] = useState(0);
 
-  const seats = ballot.seatsAvailable || 1;
+  const seats = election.seatsAvailable || 1;
   const totalEntered = Object.values(votes).reduce((s, v) => s + Number(v || 0), 0);
-  const canEnter = can(role, 'enterResults') && ballot.votingStatus === 'closed' && ballot.status !== 'certified';
-  const sorted = [...ballot.candidates].sort((a, b) => Number(votes[b.id] || 0) - Number(votes[a.id] || 0));
+  const sorted = [...election.candidates].sort((a, b) => Number(votes[b.id]||0) - Number(votes[a.id]||0));
+
+  const addObserver = () => {
+    if (!observer.trim()) return;
+    onUpdate({ countingMeeting: { ...election.countingMeeting, observers: [...(election.countingMeeting.observers || []), observer] } });
+    addAudit('Observer Registered', `${observer} registered as observer for counting meeting.`, 'gray');
+    setObserver('');
+  };
 
   const saveDraft = () => {
-    const updated = ballot.candidates.map(c => ({ ...c, votes: Number(votes[c.id] || 0) }));
-    onUpdate({ candidates: updated, votesCast: Number(totalCast) });
-    addAudit('Results Saved (Draft)', `Draft tallies saved. Total votes entered: ${totalEntered}. Ballots cast: ${totalCast}.`, 'blue');
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  };
-
-  const addApproval = () => {
-    if (!approverName.trim() || approvals.includes(approverName.trim())) return;
-    const next = [...approvals, approverName.trim()];
-    setApprovals(next);
-    setApproverName('');
+    const updated = election.candidates.map(c => ({ ...c, votes: Number(votes[c.id] || 0) }));
+    onUpdate({ candidates: updated, ballotsReceived: Number(totalCast), results: { totalReceived: Number(totalCast), totalValid: Number(totalValid) } });
+    addAudit('Vote Tallies Saved (Draft)', `Draft results entered. ${totalEntered} total votes recorded across ${election.candidates.length} candidates.`, 'blue');
   };
 
   const certify = () => {
     const electedIds = new Set(sorted.slice(0, seats).map(c => c.id));
-    const updated = ballot.candidates.map(c => ({
-      ...c, votes: Number(votes[c.id] || 0), elected: electedIds.has(c.id),
-    }));
-    const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    onUpdate({
-      candidates: updated, votesCast: Number(totalCast),
-      status: 'certified', votingStatus: 'closed',
-      certifiedDate: now, certifiedBy: approvals,
-    });
-    addAudit(
-      'Results Certified',
-      `Certified by ${approvals.join(' & ')}. Top ${seats} elected: ${sorted.slice(0, seats).map(c => c.name).join(', ')}.`,
-      'green'
-    );
+    const updated = election.candidates.map(c => ({ ...c, votes: Number(votes[c.id]||0), elected: electedIds.has(c.id) }));
+    onUpdate({ candidates: updated, ballotsReceived: Number(totalCast), stage: 'results_certified', certifiedDate: nowStr(), results: { totalReceived: Number(totalCast), totalValid: Number(totalValid), certifiedBy: approvals[0] } });
+    addAudit('Results Certified', `Results certified by Inspector. Top ${seats}: ${sorted.slice(0, seats).map(c => c.name).join(', ')}.`, 'green');
     setCertStep(0);
   };
 
-  if (ballot.status === 'certified') {
-    const tot = ballot.candidates.reduce((s, c) => s + c.votes, 0);
-    return (
-      <div>
-        <div className="flex items-center justify-between mt-1">
-          <SL>Final Results</SL>
-          <Badge variant="green"><CheckCircle size={10}/>Certified {ballot.certifiedDate}</Badge>
-        </div>
-        <div className="mb-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700">
-          Certified by: <strong>{ballot.certifiedBy?.join(', ') || '—'}</strong>
-        </div>
-        <div className="space-y-2">
-          {[...ballot.candidates].sort((a, b) => b.votes - a.votes).map((c, rank) => {
-            const pct = tot > 0 ? Math.round(c.votes / tot * 100) : 0;
+  const precountChecklist = [
+    { label: 'All outer envelopes logged', done: (election.ballotReceiptLog||[]).length > 0 },
+    { label: 'Meeting is open to all members and candidates', done: (election.countingMeeting.observers||[]).length >= 0 },
+    { label: 'No tally sheets accessed before meeting (§ 5120(c))', done: true },
+    { label: 'Double-envelope system preserved — inner envelopes unopened until count', done: true },
+    { label: 'Inspector present and ready to conduct count', done: !!election.inspector },
+  ];
+
+  return (
+    <div>
+      <SL>Counting Meeting Details</SL>
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {[['Date', election.countingMeeting?.date], ['Time', election.countingMeeting?.time], ['Location', election.countingMeeting?.location]].map(([l, v]) => (
+          <div key={l} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wider">{l}</p>
+            <p className="text-xs font-semibold text-slate-800 mt-0.5">{v || '—'}</p>
+          </div>
+        ))}
+      </div>
+
+      <SL>Pre-Counting Checklist</SL>
+      <div className="space-y-1 mb-4">
+        {precountChecklist.map(({ label, done }) => (
+          <div key={label} className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50">
+            <div className={clsx('w-4 h-4 rounded flex items-center justify-center flex-shrink-0', done ? 'bg-emerald-500' : 'bg-slate-200')}>
+              {done && <Check size={9} className="text-white"/>}
+            </div>
+            <span className={clsx('text-xs', done ? 'text-slate-700' : 'text-slate-400')}>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      <SL>Observers</SL>
+      <p className="text-[11px] text-slate-500 mb-2">Any member or candidate may observe the counting meeting (§ 5120). Board members may observe only — not conduct the count.</p>
+      <div className="flex gap-2 mb-2">
+        <input value={observer} onChange={e => setObserver(e.target.value)} onKeyDown={e => e.key === 'Enter' && addObserver()}
+          placeholder="Observer name" className={iCls + ' text-xs py-1.5'}/>
+        <Button variant="secondary" size="sm" onClick={addObserver}><Plus size={11}/>Add</Button>
+      </div>
+      {(election.countingMeeting?.observers || []).map(o => (
+        <div key={o} className="text-xs text-slate-600 py-1 border-b border-slate-50 last:border-0 flex items-center gap-2"><Users size={10} className="text-slate-400"/>{o}</div>
+      ))}
+
+      <SL>Vote Tally Entry</SL>
+      <PermGate role={role} action="enterResults" tip="Inspector of Elections only">
+        <div className="space-y-2 mb-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-2.5 bg-slate-50 rounded-xl">
+              <label className={fLabel}>Total Ballots Cast</label>
+              <input type="number" value={totalCast} onChange={e => setTotalCast(e.target.value)} className={iCls + ' mt-1'} min="0"/>
+            </div>
+            <div className="p-2.5 bg-slate-50 rounded-xl">
+              <label className={fLabel}>Valid Ballots</label>
+              <input type="number" value={totalValid} onChange={e => setTotalValid(e.target.value)} className={iCls + ' mt-1'} min="0"/>
+            </div>
+          </div>
+          {sorted.map((c, rank) => {
+            const v   = Number(votes[c.id] || 0);
+            const pct = totalEntered > 0 ? Math.round(v / totalEntered * 100) : 0;
             return (
-              <div key={c.id} className={clsx('p-3 border rounded-xl', c.elected ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100')}>
+              <div key={c.id} className="p-3 border border-slate-100 rounded-xl">
                 <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-slate-400">#{rank + 1}</span>
-                    <span className="text-sm font-semibold text-slate-800">{c.name}</span>
+                    <span className="text-sm font-semibold text-slate-800 truncate">{c.name}</span>
+                    {rank < seats && totalEntered > 0 && <Badge variant="blue">On track</Badge>}
                     {c.elected && <Badge variant="green"><Award size={9}/>Elected</Badge>}
                   </div>
-                  <span className="text-sm font-bold text-slate-700">
-                    {c.votes} <span className="text-xs font-normal text-slate-400">({pct}%)</span>
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">{pct}%</span>
+                    <input type="number" value={votes[c.id] ?? ''} min="0"
+                      onChange={e => setVotes(p => ({ ...p, [c.id]: e.target.value }))}
+                      disabled={election.stage === 'results_certified'}
+                      className="w-20 px-2 py-1 text-sm text-center bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400 disabled:bg-slate-50 disabled:text-slate-400"
+                      placeholder="0"/>
+                  </div>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-1.5">
-                  <div className={clsx('h-1.5 rounded-full', c.elected ? 'bg-emerald-500' : 'bg-navy-500')}
-                    style={{ width: `${pct}%` }}/>
+                  <div className={clsx('h-1.5 rounded-full transition-all', c.elected ? 'bg-emerald-500' : 'bg-navy-600')} style={{ width: `${pct}%` }}/>
                 </div>
               </div>
             );
           })}
+          {election.stage !== 'results_certified' && (
+            <div className="flex gap-2 mt-2">
+              <Button variant="secondary" size="sm" onClick={saveDraft}>Save Draft</Button>
+              <Button variant="primary" size="sm" onClick={() => setCertStep(1)}><Award size={12}/>Certify Results</Button>
+            </div>
+          )}
+          {election.stage === 'results_certified' && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <div className="flex items-center gap-2"><CheckCircle size={13} className="text-emerald-600"/><span className="text-xs font-bold text-emerald-800">Results certified {election.certifiedDate}</span></div>
+              {election.results?.certifiedBy && <p className="text-[11px] text-emerald-700 mt-0.5">Certified by: {election.results.certifiedBy}</p>}
+            </div>
+          )}
+          {certStep === 1 && (
+            <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-2">
+              <p className="text-sm font-bold text-amber-900">Confirm Certification (Civil Code § 5120)</p>
+              <p className="text-xs text-amber-700">Enter the Inspector's name to digitally certify. This publishes results to all members.</p>
+              {approvals.length === 0 && (
+                <div className="flex gap-2">
+                  <input value={approverName} onChange={e => setApproverName(e.target.value)} onKeyDown={e => e.key === 'Enter' && (() => { if (approverName.trim()) { setApprovals([approverName.trim()]); setApproverName(''); } })()} placeholder="Inspector name" className={iCls + ' text-xs py-1.5'}/>
+                  <Button variant="primary" size="sm" onClick={() => { if (approverName.trim()) { setApprovals([approverName.trim()]); setApproverName(''); } }}>Confirm</Button>
+                </div>
+              )}
+              {approvals.length > 0 && (
+                <div>
+                  <p className="text-xs text-emerald-700 mb-2 flex items-center gap-1"><CheckCircle size={11}/>{approvals[0]}</p>
+                  <div className="flex gap-2">
+                    <Button variant="primary" onClick={certify}><Award size={12}/>Certify & Publish</Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setCertStep(0); setApprovals([]); }}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
-    );
-  }
+      </PermGate>
+    </div>
+  );
+}
+
+function NoticesTab({ election, role, onUpdate, addAudit }) {
+  const requiredTypes = Object.entries(NOTICE_TYPES).filter(([, v]) => v.required.includes(election.type));
+  const sentTypes = new Set(election.notices.map(n => n.type));
+
+  const send = (typeId) => {
+    const meta = NOTICE_TYPES[typeId];
+    const n = { id: `n${Date.now()}`, type: typeId, sentDate: nowStr(), recipientCount: election.totalEligible, method: 'Email & Mail', status: 'sent' };
+    onUpdate({ notices: [n, ...election.notices] });
+    addAudit(`Notice Sent: ${meta.label}`, `${meta.label} sent to ${election.totalEligible} members. Legal basis: ${meta.legal}.`, 'blue');
+  };
 
   return (
     <div>
-      <div className="flex items-center justify-between mt-1">
-        <SL>Enter Vote Tallies</SL>
-        {ballot.votingStatus !== 'closed' && <Badge variant="amber">Voting still open</Badge>}
+      <SL>Required Legal Notices</SL>
+      <p className="text-xs text-slate-500 mb-3">All notices must be archived as PDF with send timestamps (AUD-02). Stored for minimum 4 years.</p>
+      <div className="space-y-2">
+        {requiredTypes.map(([typeId, meta]) => {
+          const sent = sentTypes.has(typeId);
+          const notice = election.notices.find(n => n.type === typeId);
+          return (
+            <div key={typeId} className={clsx('p-3 border rounded-xl', sent ? 'border-emerald-100 bg-emerald-50' : 'border-slate-100')}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div className={clsx('w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5', sent ? 'bg-emerald-500' : 'bg-slate-200')}>
+                    {sent ? <Check size={10} className="text-white"/> : <Mail size={9} className="text-slate-400"/>}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">{meta.label}</p>
+                    <p className="text-[10px] text-slate-400">{meta.legal}</p>
+                    {sent && notice && <p className="text-[11px] text-emerald-700 mt-0.5">Sent {notice.sentDate} · {notice.recipientCount} recipients · {notice.method}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {sent && <button className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"><Download size={10}/>PDF</button>}
+                  <PermGate role={role} action="generateNotices">
+                    {!sent
+                      ? <Button variant="primary" size="sm" onClick={() => send(typeId)}><Mail size={11}/>Send</Button>
+                      : <Badge variant="green">Sent</Badge>
+                    }
+                  </PermGate>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <div className="p-3 bg-slate-50 rounded-xl">
-          <label className={fLabel}>Total Ballots Cast</label>
-          <input type="number" value={totalCast} onChange={e => setTotalCast(e.target.value)}
-            className={iCls + ' mt-1'} disabled={!canEnter} min="0"/>
-        </div>
-        <div className="p-3 bg-slate-50 rounded-xl">
-          <p className={fLabel}>Turnout</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">
-            {ballot.totalEligible ? `${Math.round(Number(totalCast) / ballot.totalEligible * 100)}%` : '—'}
-          </p>
-          <p className="text-[11px] text-slate-400">{totalCast} of {ballot.totalEligible}</p>
-        </div>
-      </div>
-
-      {ballot.candidates.length === 0
-        ? <p className="text-sm text-slate-400 italic mb-4">Add candidates before entering results.</p>
-        : (
-          <div className="space-y-2 mb-4">
-            {sorted.map((c, rank) => {
-              const v = Number(votes[c.id] || 0);
-              const pct = totalEntered > 0 ? Math.round(v / totalEntered * 100) : 0;
+      {election.notices.length > 0 && (
+        <>
+          <SL>Notice Archive</SL>
+          <div className="space-y-1">
+            {election.notices.map(n => {
+              const meta = NOTICE_TYPES[n.type];
               return (
-                <div key={c.id} className="p-3 border border-slate-100 rounded-xl">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-bold text-slate-400 w-5 flex-shrink-0">#{rank + 1}</span>
-                      <span className="text-sm font-semibold text-slate-800 truncate">{c.name}</span>
-                      {totalEntered > 0 && rank < seats && <Badge variant="blue">On track</Badge>}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
-                      <input type="number" value={votes[c.id] ?? ''} min="0"
-                        onChange={e => setVotes(p => ({ ...p, [c.id]: e.target.value }))}
-                        disabled={!canEnter}
-                        className="w-20 px-2 py-1 text-sm text-center bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400 disabled:bg-slate-50 disabled:text-slate-400"
-                        placeholder="0"/>
-                    </div>
+                <div key={n.id} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                  <div>
+                    <p className="text-xs font-medium text-slate-700">{meta?.label || n.type}</p>
+                    <p className="text-[11px] text-slate-400">{n.sentDate} · {n.recipientCount} recipients · {n.method}</p>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                    <div className="bg-navy-600 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }}/>
-                  </div>
+                  <button className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 flex-shrink-0 ml-2"><Download size={10}/>PDF</button>
                 </div>
               );
             })}
           </div>
-        )
-      }
-
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <PermGate role={role} action="enterResults">
-          <Button variant="secondary" onClick={saveDraft}
-            disabled={ballot.candidates.length === 0 || ballot.votingStatus !== 'closed'}>
-            {saved ? <><Check size={12}/>Saved!</> : 'Save Draft'}
-          </Button>
-        </PermGate>
-        <PermGate role={role} action="certify">
-          <Button variant="primary" onClick={() => setCertStep(1)}
-            disabled={ballot.candidates.length === 0 || ballot.votingStatus !== 'closed'}>
-            <Award size={12}/>Certify Results
-          </Button>
-        </PermGate>
-      </div>
-
-      {/* Two-step certification workflow */}
-      {certStep === 1 && (
-        <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-3">
-          <div className="flex items-center gap-2">
-            <Shield size={14} className="text-amber-600"/>
-            <p className="text-sm font-bold text-amber-900">Certification requires 2 board member approvals</p>
-          </div>
-          <p className="text-xs text-amber-700">
-            Enter the names of two board members who have reviewed and approved the results.
-            Top {seats} vote-getter{seats > 1 ? 's' : ''} will be marked elected.
-          </p>
-          {approvals.map(a => (
-            <div key={a} className="flex items-center gap-1.5 text-xs text-emerald-700 font-medium">
-              <CheckCircle size={11}/>{a}
-            </div>
-          ))}
-          {approvals.length < 2 && (
-            <div className="flex gap-2">
-              <input value={approverName} onChange={e => setApproverName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addApproval()}
-                placeholder="Board member name" className={iCls + ' text-xs py-1.5'}/>
-              <Button variant="primary" size="sm" onClick={addApproval}>Add</Button>
-            </div>
-          )}
-          <p className="text-[11px] text-amber-600">
-            {approvals.length < 2
-              ? `${2 - approvals.length} more approval${2 - approvals.length > 1 ? 's' : ''} needed`
-              : 'Both approvals collected — ready to certify.'}
-          </p>
-          {approvals.length >= 2 && (
-            <div className="flex gap-2 pt-1">
-              <Button variant="primary" onClick={certify}><Award size={12}/>Confirm & Certify</Button>
-              <Button variant="ghost" size="sm" onClick={() => { setCertStep(0); setApprovals([]); }}>Cancel</Button>
-            </div>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-function RetentionTab({ ballot, role, onUpdate, addAudit }) {
-  const [editing, setEditing] = useState(false);
-  const [destroyDraft, setDestroyDraft] = useState(ballot.destroyDate || '');
-  const [statusDraft, setStatusDraft] = useState(ballot.retentionStatus || 'active');
-  const [notesDraft, setNotesDraft] = useState(ballot.retentionNotes || '');
+function ComplianceTab({ election, role, onUpdate, addAudit }) {
+  const [showReqForm, setShowReqForm] = useState(false);
+  const [reqDraft, setReqDraft] = useState({ submittedBy: '', unit: '', notes: '' });
 
-  const retDays = daysUntil(ballot.destroyDate);
-  const retAlert = retDays !== null && retDays < 180;
-
-  const save = () => {
-    onUpdate({ destroyDate: destroyDraft, retentionStatus: statusDraft, retentionNotes: notesDraft });
-    addAudit('Retention Updated', `Destroy date: ${destroyDraft}. Status: ${statusLabels[statusDraft] || statusDraft}.`, 'amber');
-    setEditing(false);
+  const submitReq = () => {
+    if (!reqDraft.submittedBy.trim()) return;
+    const r = { ...reqDraft, id: Date.now(), date: nowStr(), status: 'pending' };
+    onUpdate({ inspectionRequests: [...election.inspectionRequests, r] });
+    addAudit('Inspection Request Submitted', `${reqDraft.submittedBy} (Unit ${reqDraft.unit}) requested inspection of election materials.`, 'amber');
+    setReqDraft({ submittedBy: '', unit: '', notes: '' });
+    setShowReqForm(false);
   };
 
-  const statusColors = {
-    active:                   'green',
-    pending_review:           'amber',
-    approved_for_destruction: 'red',
-    destroyed:                'gray',
-  };
-  const statusLabels = {
-    active:                   'Active (In Retention)',
-    pending_review:           'Pending Destruction Review',
-    approved_for_destruction: 'Approved for Destruction',
-    destroyed:                'Destroyed',
+  const fulfillReq = id => {
+    onUpdate({ inspectionRequests: election.inspectionRequests.map(r => r.id === id ? { ...r, status: 'fulfilled', fulfilledDate: nowStr() } : r) });
+    addAudit('Inspection Request Fulfilled', 'Materials inspection facilitated. Ballot secrecy preserved.', 'green');
   };
 
-  const checklist = [
-    { l: 'Original ballots / digital ballot records',         done: ballot.votesCast > 0 },
-    { l: 'Candidate eligibility verifications on file',       done: ballot.candidates.every(c => c.eligible) && ballot.candidates.length > 0 },
-    { l: 'Voter eligibility list (all eligible units)',        done: ballot.totalEligible > 0 },
-    { l: 'Vote tally sheet / results record',                 done: ballot.status === 'certified' },
-    { l: 'Certification signatures (2 board members)',        done: (ballot.certifiedBy || []).length >= 2 },
-    { l: 'Board meeting minutes referencing results',         done: false },
+  const retDays = daysUntil(election.dates.retentionExpiry);
+
+  const complianceChecks = [
+    { label: 'Inspector assigned before ballot distribution',     done: !!election.inspector },
+    { label: 'Call for Nominations sent (≥ 90-day period)',        done: election.notices.some(n => n.type === 'call_for_nominations') },
+    { label: 'Nomination Reminder sent',                           done: election.notices.some(n => n.type === 'nomination_reminder') },
+    { label: 'Pre-Ballot Notice sent (≥ 30 days before ballots)', done: election.notices.some(n => n.type === 'pre_ballot_notice') },
+    { label: 'Ballot Package distributed (≥ 30 days before deadline)', done: election.notices.some(n => n.type === 'ballot_package') },
+    { label: 'Counting Meeting Notice sent',                       done: election.notices.some(n => n.type === 'counting_meeting') },
+    { label: 'Results certified by Inspector',                     done: !!election.certifiedDate },
+    { label: 'Results published to all members',                   done: election.notices.some(n => n.type === 'results_publication') },
+    { label: 'Inspector conflict-of-interest declaration on file', done: election.inspector?.conflictChecked },
+    { label: 'Election materials retained (1 year)',               done: election.stage !== 'draft' },
   ];
+  const passCount = complianceChecks.filter(c => c.done).length;
 
   return (
     <div>
-      <SL>Retention Schedule</SL>
-
-      <div className={clsx('p-4 rounded-xl border-2 mb-4', retAlert ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200')}>
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div>
-            <p className="text-xs font-bold text-slate-700">Scheduled Destruction Date</p>
-            <p className={clsx('text-lg font-black mt-0.5', retAlert ? 'text-amber-700' : 'text-slate-900')}>
-              {ballot.destroyDate || '—'}
-            </p>
-          </div>
-          {retAlert && (
-            <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">
-              <AlertTriangle size={12}/><span className="text-xs font-bold">Action Required</span>
-            </div>
-          )}
+      <SL>Compliance Report — Davis-Stirling Act</SL>
+      <div className="flex items-center justify-between mb-3">
+        <div className={clsx('text-lg font-black', passCount === complianceChecks.length ? 'text-emerald-600' : 'text-amber-600')}>
+          {passCount} / {complianceChecks.length} <span className="text-sm font-normal text-slate-500">requirements met</span>
         </div>
-        {retDays !== null && ballot.destroyDate && (
-          <div className="flex items-center gap-2 mb-3">
-            <div className="flex-1 bg-slate-200 rounded-full h-1.5">
-              <div className={clsx('h-1.5 rounded-full transition-all', retAlert ? 'bg-amber-500' : 'bg-emerald-500')}
-                style={{ width: `${Math.max(0, Math.min(100, (1 - retDays / (ballot.retentionYears * 365)) * 100))}%` }}/>
-            </div>
-            <span className="text-xs text-slate-500 flex-shrink-0">
-              {retDays > 0 ? `${retDays} days remaining` : 'Past date'}
-            </span>
-          </div>
-        )}
-        <Badge variant={statusColors[ballot.retentionStatus] || 'gray'}>
-          {statusLabels[ballot.retentionStatus] || ballot.retentionStatus}
-        </Badge>
+        <button className="text-xs text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1">
+          <Download size={11}/>Export Report
+        </button>
       </div>
-
-      <div className="space-y-0 mb-4">
-        {[
-          ['Retention Period', `${ballot.retentionYears} years`],
-          ['Legal Basis',      ballot.retentionBasis],
-          ['Election Closed',  ballot.endDate],
-          ['Certified Date',   ballot.certifiedDate || 'Not yet certified'],
-        ].map(([l, v]) => (
-          <div key={l} className="flex gap-3 py-2 border-b border-slate-50 last:border-0">
-            <p className="text-xs text-slate-400 w-28 flex-shrink-0">{l}</p>
-            <p className="text-xs text-slate-700 font-medium leading-relaxed">{v}</p>
-          </div>
-        ))}
-        {ballot.retentionNotes && (
-          <div className="flex gap-3 py-2">
-            <p className="text-xs text-slate-400 w-28 flex-shrink-0">Notes</p>
-            <p className="text-xs text-slate-700">{ballot.retentionNotes}</p>
-          </div>
-        )}
-      </div>
-
-      <PermGate role={role} action="manageRetention">
-        {!editing
-          ? <Button variant="ghost" size="sm" onClick={() => setEditing(true)}><Edit2 size={11}/>Edit Retention Settings</Button>
-          : (
-            <div className="p-4 bg-slate-50 rounded-xl space-y-3 border border-slate-200 mb-4">
-              <p className="text-xs font-bold text-slate-700">Edit Retention Settings</p>
-              <div>
-                <label className={fLabel}>Scheduled Destruction Date</label>
-                <input value={destroyDraft} onChange={e => setDestroyDraft(e.target.value)}
-                  placeholder="Nov 30, 2030" className={iCls}/>
-              </div>
-              <div>
-                <label className={fLabel}>Retention Status</label>
-                <select value={statusDraft} onChange={e => setStatusDraft(e.target.value)} className={iCls}>
-                  <option value="active">Active (In Retention)</option>
-                  <option value="pending_review">Pending Destruction Review</option>
-                  <option value="approved_for_destruction">Approved for Destruction</option>
-                  <option value="destroyed">Destroyed</option>
-                </select>
-              </div>
-              <div>
-                <label className={fLabel}>Notes</label>
-                <textarea value={notesDraft} onChange={e => setNotesDraft(e.target.value)} rows={2}
-                  className={iCls} placeholder="e.g. Board approved destruction at Jun 2030 meeting"/>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="primary" size="sm" onClick={save}><Check size={11}/>Save</Button>
-                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-              </div>
+      <div className="space-y-1 mb-4">
+        {complianceChecks.map(({ label, done }) => (
+          <div key={label} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50">
+            <div className={clsx('w-4 h-4 rounded flex items-center justify-center flex-shrink-0', done ? 'bg-emerald-500' : 'bg-slate-200')}>
+              {done && <Check size={9} className="text-white"/>}
             </div>
-          )
-        }
-      </PermGate>
-
-      <SL>Retention Checklist</SL>
-      <div className="space-y-1">
-        {checklist.map(({ l, done }) => (
-          <div key={l} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50">
-            <div className={clsx('w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors', done ? 'bg-emerald-500' : 'bg-slate-200')}>
-              {done && <Check size={10} className="text-white"/>}
-            </div>
-            <span className={clsx('text-xs', done ? 'text-slate-700' : 'text-slate-400')}>{l}</span>
+            <span className={clsx('text-xs', done ? 'text-slate-700' : 'text-slate-400')}>{label}</span>
           </div>
         ))}
       </div>
+
+      {election.acclamationDeclared && (
+        <>
+          <SL>Election by Acclamation Record (AB 502)</SL>
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-3">
+            <p className="text-xs font-bold text-emerald-800">Acclamation declared {election.certifiedDate}</p>
+            <p className="text-[11px] text-emerald-700 mt-0.5">All 4 AB 502 conditions verified. No ballot election required.</p>
+          </div>
+        </>
+      )}
+
+      <SL>Retention</SL>
+      <div className={clsx('p-3 rounded-xl border mb-4', retDays !== null && retDays < 180 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200')}>
+        <div className="flex justify-between items-start">
+          <div>
+            <p className="text-xs font-semibold text-slate-700">Retention expires: <span className="font-black">{election.dates.retentionExpiry || '—'}</span></p>
+            <p className="text-[11px] text-slate-500 mt-0.5">1-year minimum · Civil Code § 5120, § 5125</p>
+          </div>
+          {retDays !== null && retDays < 180 && <AlertTriangle size={13} className="text-amber-500"/>}
+        </div>
+        {retDays !== null && <p className={clsx('text-[11px] mt-1.5 font-medium', retDays < 0 ? 'text-rose-600' : retDays < 180 ? 'text-amber-600' : 'text-slate-500')}>{retDays > 0 ? `${retDays} days remaining` : 'Past retention date — authorization required'}</p>}
+        <PermGate role={role} action="authorizeDestruction">
+          {retDays !== null && retDays <= 0 && (
+            <Button variant="danger" size="sm" className="mt-2" onClick={() => {
+              onUpdate({ retentionStatus: 'approved_for_destruction' });
+              addAudit('Destruction Authorized', 'Inspector authorized destruction of election materials after 1-year retention period.', 'red');
+            }}>Authorize Destruction</Button>
+          )}
+        </PermGate>
+      </div>
+
+      <SL>Member Inspection Requests (Civil Code § 5125)</SL>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] text-slate-500">Members may inspect election materials at any time during the retention period.</p>
+        <PermGate role={role} action="submitInspectionReq">
+          <button onClick={() => setShowReqForm(v => !v)} className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 flex-shrink-0 ml-2">
+            <Plus size={11}/>Request Inspection
+          </button>
+        </PermGate>
+      </div>
+      {showReqForm && (
+        <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Member Name *</label><input value={reqDraft.submittedBy} onChange={e => setReqDraft(d => ({ ...d, submittedBy: e.target.value }))} className={iCls}/></div>
+            <div><label className={fLabel}>Unit #</label><input value={reqDraft.unit} onChange={e => setReqDraft(d => ({ ...d, unit: e.target.value }))} className={iCls}/></div>
+          </div>
+          <div><label className={fLabel}>Notes</label><input value={reqDraft.notes} onChange={e => setReqDraft(d => ({ ...d, notes: e.target.value }))} className={iCls}/></div>
+          <div className="flex gap-2">
+            <Button variant="primary" size="sm" onClick={submitReq}><Check size={11}/>Submit</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowReqForm(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+      {election.inspectionRequests.length === 0
+        ? <p className="text-sm text-slate-400 italic">No inspection requests</p>
+        : election.inspectionRequests.map(r => (
+          <div key={r.id} className="p-3 border border-slate-100 rounded-xl mb-2">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold text-slate-800">{r.submittedBy} — Unit {r.unit}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{r.date}{r.notes && ` · ${r.notes}`}</p>
+                {r.fulfilledDate && <p className="text-[11px] text-emerald-600 mt-0.5">Fulfilled {r.fulfilledDate}</p>}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Badge variant={r.status === 'fulfilled' ? 'green' : 'amber'}>{r.status}</Badge>
+                <PermGate role={role} action="manageInspectionReqs">
+                  {r.status === 'pending' && <Button variant="secondary" size="sm" onClick={() => fulfillReq(r.id)}><Check size={11}/>Fulfill</Button>}
+                </PermGate>
+              </div>
+            </div>
+          </div>
+        ))
+      }
     </div>
   );
 }
 
-// ─── Ballot detail panel ──────────────────────────────────────────────────────
-
-function BallotDetail({ ballot, role, onUpdate, onClose }) {
+// ─── Election detail (tab router) ─────────────────────────────────────────────
+function ElectionDetail({ election, role, onUpdate, onClose }) {
   const [tab, setTab] = useState('overview');
 
   const addAudit = useCallback((action, details, variant = 'gray') => {
-    const by = ROLES[role]?.label || role;
-    const entry = makeEntry(action, details, by, variant);
-    onUpdate({ auditLog: [entry, ...(ballot.auditLog || [])] });
-  }, [ballot.auditLog, onUpdate, role]);
+    onUpdate({ auditLog: [mkAudit(action, details, ROLES[role]?.label || role, variant), ...(election.auditLog || [])] });
+  }, [election.auditLog, onUpdate, role]);
 
-  const tabs = [
-    { id: 'overview',   label: 'Overview'    },
-    { id: 'ballot',     label: 'Ballot'      },
-    { id: 'candidates', label: 'Candidates'  },
-    { id: 'voting',     label: 'Voting'      },
-    { id: 'results',    label: 'Results'     },
-    { id: 'retention',  label: 'Retention'   },
-    ...(can(role, 'viewAuditLog') ? [{ id: 'audit', label: 'Audit Log' }] : []),
-  ];
+  const allTabs = [
+    { id: 'overview',    label: 'Overview',    roles: ['manager','board','inspector','resident'] },
+    { id: 'timeline',    label: 'Timeline',    roles: ['manager','board','inspector'] },
+    { id: 'nominations', label: 'Nominations', roles: ['manager','board','inspector','resident'] },
+    { id: 'inspector',   label: 'Inspector',   roles: ['manager','board','inspector'] },
+    { id: 'counting',    label: 'Counting',    roles: ['manager','inspector'] },
+    { id: 'notices',     label: 'Notices',     roles: ['manager'] },
+    { id: 'compliance',  label: 'Compliance',  roles: ['manager','inspector','resident'] },
+    { id: 'audit',       label: 'Audit Log',   roles: ['manager','inspector'] },
+  ].filter(t => t.roles.includes(role));
 
-  const statusMap = {
-    draft:     { l: 'Draft',        c: 'gray'  },
-    active:    { l: 'Voting Open',  c: 'green' },
-    certified: { l: 'Certified',    c: 'blue'  },
-    archived:  { l: 'Archived',     c: 'gray'  },
-  };
-  const st = statusMap[ballot.status] || { l: ballot.status, c: 'gray' };
+  const stageColors = { draft:'gray', nominations_open:'blue', nominations_closed:'amber', inspector_assigned:'blue', ballots_distributed:'blue', voting_open:'green', counting_scheduled:'amber', results_certified:'green', archived:'gray' };
 
   return (
     <div className="flex flex-col h-full overflow-hidden border-l border-slate-100">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-slate-100 flex-shrink-0">
+      <div className="px-5 py-3.5 border-b border-slate-100 flex-shrink-0">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h2 className="text-sm font-bold text-slate-900 leading-snug">{ballot.title}</h2>
-              <Badge variant={st.c}>{st.l}</Badge>
-              <Badge variant="blue">{ballot.type}</Badge>
+              <h2 className="text-sm font-bold text-slate-900 leading-snug">{election.title}</h2>
+              <Badge variant={stageColors[election.stage] || 'gray'}>{STAGES.find(s => s.id === election.stage)?.label}</Badge>
+              <Badge variant="blue">{election.type === 'board_director' ? 'Board' : election.type === 'ccr_amendment' ? 'CC&R' : election.type === 'recall' ? 'Recall' : 'Assessment'}</Badge>
             </div>
-            <p className="text-xs text-slate-400">{ballot.startDate} – {ballot.endDate} · {ballot.votingMethod}</p>
+            <p className="text-xs text-slate-400">{election.dates.votingDeadline ? `Voting deadline: ${election.dates.votingDeadline}` : 'Dates not yet configured'} · {election.votingMethod}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 flex-shrink-0">
-            <X size={14}/>
-          </button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 flex-shrink-0"><X size={14}/></button>
         </div>
       </div>
-
-      {/* Tab nav — scrollable so all 7 tabs fit */}
       <div className="px-5 pt-3 flex-shrink-0 overflow-x-auto">
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg mb-5 min-w-max">
-          {tabs.map(t => (
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg mb-4 min-w-max">
+          {allTabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={clsx('py-1.5 px-2.5 text-[11px] font-medium rounded-md transition-all whitespace-nowrap',
-                tab === t.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+              className={clsx('py-1.5 px-2.5 text-[11px] font-medium rounded-md transition-all whitespace-nowrap', tab === t.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
               {t.label}
             </button>
           ))}
         </div>
       </div>
-
-      {/* Content */}
       <div className="flex-1 overflow-y-auto px-5 pb-6">
-        {tab === 'overview'   && <OverviewTab   ballot={ballot} role={role}/>}
-        {tab === 'ballot'     && <BallotPreviewTab ballot={ballot} role={role} onUpdate={onUpdate}/>}
-        {tab === 'candidates' && <CandidatesTab ballot={ballot} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
-        {tab === 'voting'     && <VotingTab     ballot={ballot} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
-        {tab === 'results'    && <ResultsTab    ballot={ballot} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
-        {tab === 'retention'  && <RetentionTab  ballot={ballot} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'overview'    && <OverviewTab    election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'timeline'    && <TimelineTab    election={election}/>}
+        {tab === 'nominations' && <NominationsTab election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'inspector'   && <InspectorTab   election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'counting'    && <CountingTab    election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'notices'     && <NoticesTab     election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'compliance'  && <ComplianceTab  election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'audit' && (
           <div>
             <div className="flex items-center justify-between mt-1 mb-1">
-              <SL>Audit Trail</SL>
-              <button className="text-xs text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 mb-[-4px]">
-                <Download size={11}/>Export CSV
-              </button>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-4 mb-2">Audit Trail</p>
+              <button className="text-xs text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 mt-1"><Download size={11}/>Export</button>
             </div>
-            <p className="text-[11px] text-slate-400 mb-3">
-              Complete immutable log of all actions on this ballot record. Visible to Admin and Secretary only.
-            </p>
-            {(ballot.auditLog || []).map(e => <AuditRow key={e.id} entry={e}/>)}
-            {!(ballot.auditLog || []).length && (
-              <p className="text-sm text-slate-400 italic text-center py-4">No audit entries</p>
-            )}
+            <p className="text-[11px] text-slate-400 mb-3">Immutable log. All system actions related to this election are logged (NFR-05).</p>
+            {(election.auditLog || []).map(e => <AuditRow key={e.id} e={e}/>)}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Create modal ─────────────────────────────────────────────────────────────
+function CreateModal({ onClose, onCreate, role }) {
+  const [form, setForm] = useState({
+    title: '', type: 'board_director', votingMethod: 'hybrid',
+    seatsAvailable: 3, quorumRequired: true, quorumPct: 25, totalEligible: 148,
+    description: '',
+  });
+  const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  const isElectronic = form.votingMethod !== 'paper';
+  const isAssessment = form.type === 'assessment';
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }}>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div><h2 className="text-base font-semibold text-slate-900">Create Election / Vote</h2><p className="text-xs text-slate-400">California Davis-Stirling Act — Civil Code §§ 5100–5145</p></div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"><X size={16}/></button>
+        </div>
+        <div className="px-6 py-5 space-y-3 overflow-y-auto">
+          <div><label className={fLabel}>Election Title *</label><input value={form.title} onChange={f('title')} placeholder="e.g. Board of Directors Election 2027" className={iCls}/></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={fLabel}>Election Type</label>
+              <select value={form.type} onChange={f('type')} className={iCls}>
+                <option value="board_director">Board Director Election</option>
+                <option value="recall">Recall Election</option>
+                <option value="assessment">Assessment Vote</option>
+                <option value="ccr_amendment">CC&R Amendment Vote</option>
+              </select>
+            </div>
+            <div>
+              <label className={fLabel}>Seats / Choices</label>
+              <input type="number" value={form.seatsAvailable} onChange={f('seatsAvailable')} min="1" className={iCls}/>
+            </div>
+          </div>
+          <div>
+            <label className={fLabel}>Voting Method</label>
+            <select value={form.votingMethod} onChange={f('votingMethod')} className={iCls}>
+              <option value="paper">Paper (Mail-in) — Double-envelope system</option>
+              <option value="electronic">Electronic Secret Ballot (AB 2159 / AB 648 — Jan 1, 2025)</option>
+              <option value="hybrid">Hybrid (Paper + Electronic)</option>
+            </select>
+            {isElectronic && isAssessment && (
+              <p className="text-xs text-rose-600 mt-1 flex items-center gap-1"><AlertTriangle size={11}/>Electronic voting is NOT permitted for assessment votes (Civil Code § 5105).</p>
+            )}
+            {isElectronic && !isAssessment && (
+              <p className="text-xs text-blue-600 mt-1 flex items-center gap-1"><Info size={11}/>Requires HOA election rules permitting electronic voting. Member opt-in/out required ≥90 days before election.</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={fLabel}>Eligible Voters</label><input type="number" value={form.totalEligible} onChange={f('totalEligible')} className={iCls}/></div>
+            <div>
+              <label className={fLabel}>Quorum %</label>
+              <div className="flex gap-2 items-center">
+                <input type="checkbox" checked={form.quorumRequired} onChange={e => setForm(p => ({ ...p, quorumRequired: e.target.checked }))} className="rounded"/>
+                <span className="text-xs text-slate-500">Required</span>
+                {form.quorumRequired && <input type="number" value={form.quorumPct} onChange={f('quorumPct')} min="1" max="100" className={iCls + ' w-20'}/>}
+              </div>
+            </div>
+          </div>
+          <div><label className={fLabel}>Description</label><textarea value={form.description} onChange={f('description')} rows={2} className={iCls}/></div>
+          <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 space-y-1">
+            <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider">Legal Timeline Minimums</p>
+            {[
+              form.type === 'board_director' || form.type === 'recall' ? '90-day nomination period required' : null,
+              'Pre-ballot notice ≥ 30 days before ballot distribution',
+              'Ballots distributed ≥ 30 days before voting deadline',
+              isElectronic ? 'Member opt-in/out period opens ≥ 90 days before election' : null,
+              '1-year retention of all election materials after election',
+            ].filter(Boolean).map(l => <p key={l} className="text-[11px] text-blue-700 flex items-center gap-1"><Info size={9}/>{l}</p>)}
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={() => onCreate(form)} disabled={!form.title.trim() || (isElectronic && isAssessment)}>
+            <Check size={13}/>Create Election
+          </Button>
+        </div>
       </div>
     </div>
   );
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-
 export default function BallotManagementPage() {
-  const [ballots, setBallots] = useState(SEED);
-  const [selected, setSelected] = useState(null);
-  const [role, setRole] = useState('admin');
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [elections, setElections] = useState(SEED);
+  const [selected, setSelected]   = useState(null);
+  const [role, setRole]           = useState('manager');
+  const [search, setSearch]       = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
-    title: '', type: 'Board', status: 'draft', votingStatus: 'pending',
-    startDate: '', endDate: '', description: '',
-    totalEligible: 148, votesCast: 0,
-    seatsAvailable: 3, votingMethod: 'Mail-in & Online',
-    ballotInstructions: '', certifiedDate: null, certifiedBy: [],
-    candidates: [], auditLog: [],
-    retentionStatus: 'active', retentionNotes: '',
-  });
 
   const update = (id, patch) => {
-    setBallots(p => p.map(b => b.id === id ? { ...b, ...patch } : b));
+    setElections(p => p.map(e => e.id === id ? { ...e, ...patch } : e));
     setSelected(p => p?.id === id ? { ...p, ...patch } : p);
   };
 
-  const create = () => {
-    if (!form.title.trim()) return;
-    const retYrs = RETENTION_YEARS[form.type] || 7;
+  const create = form => {
+    const retYrs = 1;
     const b = {
-      ...form, id: Date.now(),
-      retentionYears: retYrs,
-      retentionBasis: RETENTION_BASIS[form.type] || '',
-      destroyDate: addYears(
-        form.endDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        retYrs
-      ),
-      auditLog: [makeEntry(
-        'Ballot Created',
-        `"${form.title}" created. Type: ${form.type}. Seats: ${form.seatsAvailable}. Method: ${form.votingMethod}.`,
-        ROLES[role]?.label || role,
-        'gray'
-      )],
+      ...form,
+      id: Date.now(),
+      stage: 'draft',
+      votingMethod: form.votingMethod,
+      ballotsDistributed: 0, ballotsReceived: 0,
+      dates: { nominationsOpen: null, nominationReminder: null, nominationsClose: null, optInDeadline: null, preBallotNotice: null, ballotDistribution: null, votingDeadline: null, countingMeeting: null, retentionExpiry: null },
+      inspector: null, candidates: [], ballotInstructions: '', ballotReceiptLog: [],
+      countingMeeting: { date: '', time: '', location: '', observers: [] },
+      notices: [], inspectionRequests: [],
+      acclamationDeclared: false, adjournedMeeting: null, quorumMet: null,
+      results: null, certifiedDate: null, retentionStatus: 'active', destroyDate: null,
+      auditLog: [mkAudit('Election Created', `${form.title} created. Type: ${form.type}. Method: ${form.votingMethod}. Seats: ${form.seatsAvailable}.`, ROLES[role]?.label, 'gray')],
     };
-    setBallots(p => [b, ...p]);
+    setElections(p => [b, ...p]);
     setSelected(b);
     setShowCreate(false);
-    setForm({
-      title: '', type: 'Board', status: 'draft', votingStatus: 'pending',
-      startDate: '', endDate: '', description: '',
-      totalEligible: 148, votesCast: 0,
-      seatsAvailable: 3, votingMethod: 'Mail-in & Online',
-      ballotInstructions: '', certifiedDate: null, certifiedBy: [],
-      candidates: [], auditLog: [], retentionStatus: 'active', retentionNotes: '',
-    });
   };
 
-  const filtered = useMemo(() => ballots.filter(b => {
-    const q = search.toLowerCase();
-    const matchQ = !q || b.title.toLowerCase().includes(q) || b.type.toLowerCase().includes(q);
-    const matchS = filterStatus === 'all' || b.status === filterStatus;
-    return matchQ && matchS;
-  }), [ballots, search, filterStatus]);
+  const filtered = useMemo(() => elections.filter(e =>
+    !search || e.title.toLowerCase().includes(search.toLowerCase()) || e.type.toLowerCase().includes(search.toLowerCase())
+  ), [elections, search]);
 
-  const retAlerts = ballots.filter(b => {
-    const d = daysUntil(b.destroyDate);
-    return d !== null && d < 180 && d > 0;
-  }).length;
-
-  const statusMap = {
-    draft:     { l: 'Draft',       c: 'gray'  },
-    active:    { l: 'Voting Open', c: 'green' },
-    certified: { l: 'Certified',   c: 'blue'  },
-    archived:  { l: 'Archived',    c: 'gray'  },
-  };
-
-  const counts = { draft: 0, active: 0, certified: 0 };
-  ballots.forEach(b => { if (b.status in counts) counts[b.status]++; });
-
-  const fTabs = [
-    { id: 'all',       label: `All (${ballots.length})` },
-    { id: 'draft',     label: `Draft (${counts.draft})` },
-    { id: 'active',    label: `Active (${counts.active})` },
-    { id: 'certified', label: `Certified (${counts.certified})` },
-  ];
+  const counts = { active: elections.filter(e => !['draft','archived'].includes(e.stage)).length, certified: elections.filter(e => e.stage === 'results_certified' || e.stage === 'archived').length, compliance: elections.filter(e => e.notices.length > 0).length };
+  const stageColors = { draft:'gray', nominations_open:'blue', nominations_closed:'amber', inspector_assigned:'blue', ballots_distributed:'blue', voting_open:'green', counting_scheduled:'amber', results_certified:'green', archived:'gray' };
 
   return (
     <div className="page-enter">
-      {/* Create modal */}
-      {showCreate && can(role, 'createBallot') && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }}>
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900">Create Ballot</h2>
-              <button onClick={() => setShowCreate(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"><X size={16}/></button>
-            </div>
-            <div className="px-6 py-5 space-y-3 overflow-y-auto">
-              <div>
-                <label className={fLabel}>Title *</label>
-                <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-                  placeholder="e.g. Board Election 2027" className={iCls}/>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={fLabel}>Type</label>
-                  <select value={form.type}
-                    onChange={e => setForm(p => ({ ...p, type: e.target.value, seatsAvailable: e.target.value === 'Bylaw' ? 1 : p.seatsAvailable }))}
-                    className={iCls}>
-                    {['Board', 'Bylaw', 'Special', 'Committee'].map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={fLabel}>Seats / Choices</label>
-                  <input type="number" value={form.seatsAvailable} min="1"
-                    onChange={e => setForm(p => ({ ...p, seatsAvailable: Number(e.target.value) }))}
-                    className={iCls}/>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={fLabel}>Start Date</label>
-                  <input value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
-                    placeholder="Nov 1, 2027" className={iCls}/>
-                </div>
-                <div>
-                  <label className={fLabel}>End Date</label>
-                  <input value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
-                    placeholder="Nov 30, 2027" className={iCls}/>
-                </div>
-              </div>
-              <div>
-                <label className={fLabel}>Voting Method</label>
-                <select value={form.votingMethod} onChange={e => setForm(p => ({ ...p, votingMethod: e.target.value }))} className={iCls}>
-                  {['Mail-in & Online', 'Mail-in Only', 'Online Only', 'In-Person', 'Hybrid'].map(v => <option key={v}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className={fLabel}>Eligible Voters</label>
-                <input type="number" value={form.totalEligible}
-                  onChange={e => setForm(p => ({ ...p, totalEligible: Number(e.target.value) }))} className={iCls}/>
-              </div>
-              <div>
-                <label className={fLabel}>Ballot Instructions</label>
-                <textarea value={form.ballotInstructions}
-                  onChange={e => setForm(p => ({ ...p, ballotInstructions: e.target.value }))} rows={2}
-                  placeholder={`Vote for up to ${form.seatsAvailable} candidate(s)...`} className={iCls}/>
-              </div>
-              <div>
-                <label className={fLabel}>Description</label>
-                <textarea value={form.description}
-                  onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} className={iCls}/>
-              </div>
-              <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl">
-                <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5"/>
-                <p className="text-xs text-blue-700">
-                  <strong>Retention:</strong> {RETENTION_YEARS[form.type] || 7} years · {RETENTION_BASIS[form.type] || ''}
-                </p>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button variant="primary" onClick={create}><Check size={13}/>Create Ballot</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showCreate && <CreateModal onClose={() => setShowCreate(false)} onCreate={create} role={role}/>}
 
-      {/* Page header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-display text-slate-900">Ballot Management</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Role-based access · Retention tracking · Full audit trail</p>
+          <h1 className="text-xl font-display text-slate-900">Elections & Ballot Management</h1>
+          <p className="text-sm text-slate-500 mt-0.5">California Davis-Stirling Act · Civil Code §§ 5100–5145 · as amended Jan 1, 2025</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {retAlerts > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-medium text-amber-700">
-              <Bell size={11}/>{retAlerts} retention alert{retAlerts > 1 ? 's' : ''}
-            </div>
-          )}
-          {/* Role switcher — demo only */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
             <Shield size={11} className="text-slate-400"/>
             <span className="text-[10px] text-slate-400 font-medium">Role:</span>
-            <select value={role} onChange={e => setRole(e.target.value)}
-              className="text-xs text-slate-700 font-medium bg-transparent border-none outline-none cursor-pointer">
+            <select value={role} onChange={e => setRole(e.target.value)} className="text-xs text-slate-700 font-medium bg-transparent border-none outline-none cursor-pointer">
               {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <RolePill role={role}/>
           </div>
-          <PermGate role={role} action="createBallot" tip="Admin or Secretary role required to create ballots">
-            <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
-              <Plus size={12}/>Create Ballot
-            </Button>
+          {role === 'auditor' && (
+            <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">
+              Financial Auditor — no election data access
+            </div>
+          )}
+          <PermGate role={role} action="createElection" tip="HOA Manager role required">
+            <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}><Plus size={12}/>New Election</Button>
           </PermGate>
         </div>
       </div>
 
-      {/* Metrics */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <MetricCard label="Total Ballots"    value={ballots.length}    sub="All records"/>
-        <MetricCard label="Certified"        value={counts.certified}  sub="Results final" subVariant="good"/>
-        <MetricCard label="In Retention"     value={counts.certified}  sub="Legally held" subVariant="neutral"/>
-        <MetricCard label="Retention Alerts" value={retAlerts}         sub={retAlerts > 0 ? 'Action needed' : 'All clear'} subVariant={retAlerts > 0 ? 'bad' : 'good'}/>
-      </div>
+      {role === 'auditor' ? (
+        <Alert variant="info" title="Access Restricted">
+          Financial Auditor accounts have read-only access to financial records only. Election and ballot data is completely isolated per Davis-Stirling Act requirements and ChakrazAI RBAC policy.
+        </Alert>
+      ) : (
+        <>
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <MetricCard label="Total Elections"  value={elections.length} sub="All records"/>
+            <MetricCard label="Active"            value={counts.active}    sub="In progress"        subVariant={counts.active > 0 ? 'warn' : 'neutral'}/>
+            <MetricCard label="Certified"         value={counts.certified} sub="Results final"      subVariant="good"/>
+            <MetricCard label="Davis-Stirling"    value="CA §§ 5100–5145"  sub="Compliance framework"/>
+          </div>
 
-      {/* List + detail */}
-      <Card padding={false} className={clsx('overflow-hidden', selected && 'flex')}>
+          <Card padding={false} className={clsx('overflow-hidden', selected && 'flex')}>
+            <div className={clsx('flex flex-col border-r border-slate-100 flex-shrink-0', selected ? 'w-72' : 'w-full')} style={selected ? { height: 'calc(100vh - 280px)' } : {}}>
+              <div className="p-3 border-b border-slate-100 flex-shrink-0">
+                <div className="relative">
+                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search elections..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-300"/>
+                </div>
+              </div>
 
-        {/* Left: list panel */}
-        <div className={clsx('flex flex-col border-r border-slate-100 flex-shrink-0', selected ? 'w-72' : 'w-full')}
-          style={selected ? { height: 'calc(100vh - 290px)' } : {}}>
-
-          <div className="p-3 border-b border-slate-100 flex-shrink-0 space-y-2">
-            <div className="relative">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
-              <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search ballots..." className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-300"/>
+              {selected ? (
+                <div className="flex-1 overflow-y-auto">
+                  {filtered.map(e => (
+                    <button key={e.id} onClick={() => setSelected(e)}
+                      className={clsx('w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors border-l-[3px]', selected?.id === e.id ? 'bg-navy-50 border-l-navy-600' : 'border-l-transparent')}>
+                      <p className="text-xs font-semibold text-slate-800 truncate leading-snug">{e.title}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Badge variant={stageColors[e.stage] || 'gray'}>{STAGES.find(s => s.id === e.stage)?.label}</Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead><tr className="border-b border-slate-100">{['Election','Type','Method','Stage','Quorum','Inspector'].map(h => <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{h}</th>)}</tr></thead>
+                    <tbody>
+                      {filtered.map(e => {
+                        const pct = e.totalEligible ? Math.round(e.ballotsReceived / e.totalEligible * 100) : 0;
+                        return (
+                          <tr key={e.id} onClick={() => setSelected(e)} className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors">
+                            <td className="px-5 py-3"><p className="font-semibold text-slate-800 text-xs">{e.title}</p><p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{e.description}</p></td>
+                            <td className="px-5 py-3"><Badge variant="blue">{e.type === 'board_director' ? 'Board' : e.type === 'ccr_amendment' ? 'CC&R' : e.type === 'recall' ? 'Recall' : 'Assessment'}</Badge></td>
+                            <td className="px-5 py-3 text-xs text-slate-600 capitalize">{e.votingMethod}</td>
+                            <td className="px-5 py-3"><Badge variant={stageColors[e.stage] || 'gray'}>{STAGES.find(s => s.id === e.stage)?.label}</Badge></td>
+                            <td className="px-5 py-3 text-xs text-slate-600">{e.quorumRequired ? `${pct}% / ${e.quorumPct}% req.` : 'None'}</td>
+                            <td className="px-5 py-3"><Badge variant={e.inspector ? 'green' : 'amber'}>{e.inspector ? e.inspector.name : 'Not Assigned'}</Badge></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-            {!selected && (
-              <div className="flex gap-1">
-                {fTabs.map(t => (
-                  <button key={t.id} onClick={() => setFilterStatus(t.id)}
-                    className={clsx('px-2.5 py-1 text-[11px] rounded-lg font-medium transition-colors',
-                      filterStatus === t.id ? 'bg-navy-600 text-white' : 'text-slate-500 hover:bg-slate-100')}>
-                    {t.label}
-                  </button>
-                ))}
+
+            {selected && (
+              <div className="flex-1 overflow-hidden" style={{ height: 'calc(100vh - 280px)' }}>
+                <ElectionDetail election={selected} role={role} onUpdate={p => update(selected.id, p)} onClose={() => setSelected(null)}/>
               </div>
             )}
-          </div>
-
-          {/* Compact list when detail is open */}
-          {selected ? (
-            <div className="flex-1 overflow-y-auto">
-              {filtered.map(b => {
-                const st = statusMap[b.status] || { l: b.status, c: 'gray' };
-                const retDays = daysUntil(b.destroyDate);
-                const retAlert = retDays !== null && retDays < 180;
-                return (
-                  <button key={b.id} onClick={() => setSelected(b)}
-                    className={clsx('w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors border-l-[3px]',
-                      selected?.id === b.id ? 'bg-navy-50 border-l-navy-600' : 'border-l-transparent')}>
-                    <div className="flex items-start justify-between gap-1.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-slate-800 truncate leading-snug">{b.title}</p>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <Badge variant={st.c}>{st.l}</Badge>
-                          <Badge variant="gray">{b.type}</Badge>
-                          {retAlert && <Badge variant="amber"><AlertTriangle size={8}/>Retention</Badge>}
-                        </div>
-                      </div>
-                      <ChevronRight size={11} className={selected?.id === b.id ? 'text-navy-500' : 'text-slate-300'}/>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            /* Full table when no detail open */
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    {['Ballot', 'Type', 'Period', 'Turnout', 'Retention', 'Status'].map(h => (
-                      <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(b => {
-                    const st = statusMap[b.status] || { l: b.status, c: 'gray' };
-                    const pct = b.totalEligible ? Math.round(b.votesCast / b.totalEligible * 100) : 0;
-                    const retDays = daysUntil(b.destroyDate);
-                    const retAlert = retDays !== null && retDays < 180;
-                    return (
-                      <tr key={b.id} onClick={() => setSelected(b)}
-                        className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors">
-                        <td className="px-5 py-3">
-                          <p className="font-semibold text-slate-800 text-xs">{b.title}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{b.description}</p>
-                        </td>
-                        <td className="px-5 py-3"><Badge variant="blue">{b.type}</Badge></td>
-                        <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">{b.startDate}<br/>{b.endDate}</td>
-                        <td className="px-5 py-3 text-xs text-slate-600">
-                          {b.votesCast}/{b.totalEligible}
-                          {b.votesCast > 0 && <span className="text-slate-400"> ({pct}%)</span>}
-                        </td>
-                        <td className="px-5 py-3">
-                          <p className={clsx('text-xs font-medium', retAlert ? 'text-amber-600' : 'text-slate-500')}>
-                            {retAlert && <AlertTriangle size={10} className="inline mr-1"/>}
-                            {b.destroyDate}
-                          </p>
-                          <p className="text-[11px] text-slate-400">{b.retentionYears}yr retention</p>
-                        </td>
-                        <td className="px-5 py-3"><Badge variant={st.c}>{st.l}</Badge></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Right: detail panel */}
-        {selected && (
-          <div className="flex-1 overflow-hidden" style={{ height: 'calc(100vh - 290px)' }}>
-            <BallotDetail
-              ballot={selected}
-              role={role}
-              onUpdate={p => update(selected.id, p)}
-              onClose={() => setSelected(null)}/>
-          </div>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
