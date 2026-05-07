@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Users, Vote, CalendarDays, Plus, X, Check, Edit2, Trash2,
   ChevronRight, Phone, Mail, Clock, MapPin, FileText,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
+import { electionsAPI } from '../lib/api';
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -776,23 +777,51 @@ function ElectionDetail({ election, onUpdate, onClose }) {
   );
 }
 
+const COMMUNITY_ID = 1;
+const LS_KEY_GOV = 'hoa_elections_gov_v1';
+
 export function ElectionsPage() {
-  const [elections, setElections] = useState(SEED_ELECTIONS);
+  const [elections, setElections] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || SEED_ELECTIONS; } catch { return SEED_ELECTIONS; }
+  });
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
 
-  const update = (id, patch) => {
+  useEffect(() => {
+    electionsAPI.list(COMMUNITY_ID).then(res => {
+      const data = res.data;
+      if (data.length > 0) {
+        setElections(data);
+        localStorage.setItem(LS_KEY_GOV, JSON.stringify(data));
+      }
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(LS_KEY_GOV, JSON.stringify(elections));
+  }, [elections]);
+
+  const update = async (id, patch) => {
     setElections(p => p.map(e => e.id === id ? { ...e, ...patch } : e));
     setSelected(p => p?.id === id ? { ...p, ...patch } : p);
+    try { await electionsAPI.update(id, patch); } catch {}
   };
-  const add = () => {
+
+  const add = async () => {
     if (!form.title.trim()) return;
-    const e = { ...form, id: Date.now(), activityLog: [{ id:1, date: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), action:'Election Created', details:'New election added', by:'Admin', variant:'blue' }] };
+    const tempId = Date.now();
+    const e = { ...form, id: tempId, communityId: COMMUNITY_ID, candidates: [], activityLog: [] };
     setElections(p => [...p, e]);
     setSelected(e);
     setShowAdd(false);
     setForm({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
+    try {
+      const res = await electionsAPI.create({ ...form, communityId: COMMUNITY_ID });
+      const created = res.data;
+      setElections(p => p.map(el => el.id === tempId ? { ...el, id: created.id } : el));
+      setSelected(p => p?.id === tempId ? { ...p, id: created.id } : p);
+    } catch {}
   };
 
   const statusCounts = { upcoming: elections.filter(e=>e.status==='upcoming').length, active: elections.filter(e=>e.status==='active').length, closed: elections.filter(e=>e.status==='closed').length };
