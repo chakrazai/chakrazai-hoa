@@ -849,15 +849,6 @@ const LS_KEY_GOV = 'hoa_elections_gov_v1';
 
 export function ElectionsPage() {
   const [pageTab, setPageTab] = useState('elections');
-  if (pageTab === 'ballots') return (
-    <div className="page-enter">
-      <div className="mb-4">
-        <Tabs tabs={[{id:'elections',label:'Elections'},{id:'ballots',label:'Ballot Management'}]} activeTab={pageTab} onChange={setPageTab}/>
-      </div>
-      <BallotManagementPage />
-    </div>
-  );
-
   const [elections, setElections] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || SEED_ELECTIONS; } catch { return SEED_ELECTIONS; }
   });
@@ -866,7 +857,6 @@ export function ElectionsPage() {
   const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
   const [residents, setResidents] = useState([]);
 
-  // On mount: sync all gov elections into BMP's localStorage so both pages stay in sync
   useEffect(() => {
     const govElections = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || []; } catch { return []; } })();
     if (govElections.length > 0) {
@@ -928,9 +918,17 @@ export function ElectionsPage() {
 
   const statusCounts = { upcoming: elections.filter(e=>e.status==='upcoming').length, active: elections.filter(e=>e.status==='active').length, closed: elections.filter(e=>e.status==='closed').length };
 
+  const pageTabs = [{id:'elections',label:'Elections'},{id:'ballots',label:'Ballot Management'}];
+
   return (
     <div className="page-enter">
-      {showAdd && (
+      <div className="mb-4">
+        <Tabs tabs={pageTabs} activeTab={pageTab} onChange={setPageTab}/>
+      </div>
+
+      {pageTab === 'ballots' ? <BallotManagementPage /> : (
+        <>
+          {showAdd && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -1024,12 +1022,14 @@ export function ElectionsPage() {
             </Table>
           </div>
         )}
-        {selected && (
-          <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
-            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} residents={residents}/>
-          </div>
-        )}
-      </Card>
+          {selected && (
+            <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
+              <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} residents={residents}/>
+            </div>
+          )}
+        </Card>
+        </>
+      )}
     </div>
   );
 }
