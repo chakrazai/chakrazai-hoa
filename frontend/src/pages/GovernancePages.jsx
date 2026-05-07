@@ -811,6 +811,38 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
   );
 }
 
+const BMP_LS_KEY = 'hoa_elections_v2';
+
+function toBmpShape(form, id) {
+  const stageMap = { upcoming: 'nominations_open', active: 'voting_open', closed: 'results_certified' };
+  return {
+    id, communityId: COMMUNITY_ID,
+    title: form.title, type: form.type,
+    votingMethod: form.votingMethod, seatsAvailable: form.seatsAvailable,
+    totalEligible: form.totalEligible, description: form.description || '',
+    stage: stageMap[form.status] || 'nominations_open',
+    quorumRequired: true, quorumPct: 25,
+    ballotsDistributed: 0, ballotsReceived: 0,
+    dates: {}, inspector: null,
+    candidates: [], ballotInstructions: form.ballotInstructions || '',
+    ballotReceiptLog: [], countingMeeting: { date:'', time:'', location:'', observers:[] },
+    notices: [], inspectionRequests: [],
+    acclamationDeclared: false, results: null, certifiedDate: null,
+    retentionStatus: 'active', destroyDate: null, auditLog: [],
+  };
+}
+
+function syncToBmp(election) {
+  try {
+    const bmp = JSON.parse(localStorage.getItem(BMP_LS_KEY) || '[]');
+    const idx = bmp.findIndex(e => e.id === election.id);
+    const record = toBmpShape(election, election.id);
+    if (idx >= 0) bmp[idx] = { ...bmp[idx], ...record };
+    else bmp.unshift(record);
+    localStorage.setItem(BMP_LS_KEY, JSON.stringify(bmp));
+  } catch {}
+}
+
 const COMMUNITY_ID = 1;
 const LS_KEY_GOV = 'hoa_elections_gov_v1';
 
@@ -842,7 +874,12 @@ export function ElectionsPage({ onNavigate }) {
   }, [elections]);
 
   const update = async (id, patch) => {
-    setElections(p => p.map(e => e.id === id ? { ...e, ...patch } : e));
+    setElections(p => {
+      const updated = p.map(e => e.id === id ? { ...e, ...patch } : e);
+      const full = updated.find(e => e.id === id);
+      if (full) syncToBmp(full);
+      return updated;
+    });
     setSelected(p => p?.id === id ? { ...p, ...patch } : p);
     try { await electionsAPI.update(id, patch); } catch {}
   };
@@ -851,6 +888,7 @@ export function ElectionsPage({ onNavigate }) {
     if (!form.title.trim()) return;
     const tempId = Date.now();
     const e = { ...form, id: tempId, communityId: COMMUNITY_ID, candidates: [], activityLog: [] };
+    syncToBmp(e);
     setElections(p => [...p, e]);
     setSelected(e);
     setShowAdd(false);
@@ -860,6 +898,7 @@ export function ElectionsPage({ onNavigate }) {
       const created = res.data;
       setElections(p => p.map(el => el.id === tempId ? { ...el, id: created.id } : el));
       setSelected(p => p?.id === tempId ? { ...p, id: created.id } : p);
+      syncToBmp({ ...e, id: created.id });
     } catch {}
   };
 
