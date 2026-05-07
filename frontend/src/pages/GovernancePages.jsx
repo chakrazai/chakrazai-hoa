@@ -8,6 +8,7 @@ import {
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
 import { electionsAPI, residentAPI } from '../lib/api';
+import BallotManagementPage from './BallotManagementPage.jsx';
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -846,7 +847,17 @@ function syncToBmp(election) {
 const COMMUNITY_ID = 1;
 const LS_KEY_GOV = 'hoa_elections_gov_v1';
 
-export function ElectionsPage({ onNavigate }) {
+export function ElectionsPage() {
+  const [pageTab, setPageTab] = useState('elections');
+  if (pageTab === 'ballots') return (
+    <div className="page-enter">
+      <div className="mb-4">
+        <Tabs tabs={[{id:'elections',label:'Elections'},{id:'ballots',label:'Ballot Management'}]} activeTab={pageTab} onChange={setPageTab}/>
+      </div>
+      <BallotManagementPage />
+    </div>
+  );
+
   const [elections, setElections] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || SEED_ELECTIONS; } catch { return SEED_ELECTIONS; }
   });
@@ -956,6 +967,9 @@ export function ElectionsPage({ onNavigate }) {
         </div>
       )}
 
+      <div className="mb-4">
+        <Tabs tabs={[{id:'elections',label:'Elections'},{id:'ballots',label:'Ballot Management'}]} activeTab={pageTab} onChange={setPageTab}/>
+      </div>
       <SectionHeader title="Elections" subtitle="Board elections, bylaw votes and ballot results"
         action={<Button variant="primary" size="sm" onClick={()=>setShowAdd(true)}><Plus size={12}/>New Election</Button>}/>
 
@@ -1012,7 +1026,7 @@ export function ElectionsPage({ onNavigate }) {
         )}
         {selected && (
           <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
-            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} onBallots={onNavigate ? ()=>onNavigate('ballots') : null} residents={residents}/>
+            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} residents={residents}/>
           </div>
         )}
       </Card>
