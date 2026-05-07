@@ -4,6 +4,7 @@ const cors       = require('cors');
 const helmet     = require('helmet');
 const morgan     = require('morgan');
 const rateLimit  = require('express-rate-limit');
+const db         = require('./db');
 
 const authRoutes      = require('./routes/auth');
 const electionsRouter = require('./routes/elections');
@@ -43,4 +44,15 @@ app.use((err, req, res, next) => {
   res.status(err.status||500).json({ error: process.env.NODE_ENV==='production' ? 'Internal server error' : err.message });
 });
 
-app.listen(PORT, () => console.log(`✅ HOAConnect API running on http://localhost:${PORT}`));
+async function start() {
+  try {
+    const { migrations } = require('./db/migrate-inline');
+    await db.query(migrations);
+    console.log('✅ Database schema up to date');
+  } catch (err) {
+    console.error('⚠️  Migration warning:', err.message);
+  }
+  app.listen(PORT, () => console.log(`✅ HOAConnect API running on http://localhost:${PORT}`));
+}
+
+start();
