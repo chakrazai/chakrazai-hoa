@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
-import { electionsAPI } from '../lib/api';
+import { electionsAPI, residentAPI } from '../lib/api';
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -638,10 +638,12 @@ function ResultsEntry({ election, onUpdate }) {
   );
 }
 
-function ElectionDetail({ election, onUpdate, onClose, onBallots }) {
+function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = [] }) {
   const [tab, setTab] = useState('overview');
   const [showCandForm, setShowCandForm] = useState(false);
   const [candDraft, setCandDraft] = useState({ name:'', bio:'' });
+  const existingNames = new Set((election.candidates || []).map(c => c.name));
+  const availableResidents = residents.filter(r => !existingNames.has(r.owner_name));
 
   const tabs = [
     { id:'overview',    label:'Overview' },
@@ -742,7 +744,19 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots }) {
             </div>
             {showCandForm && (
               <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2">
-                <div><label className={fLabel}>Candidate Name</label><input value={candDraft.name} onChange={e=>setCandDraft(d=>({...d,name:e.target.value}))} className={iCls} placeholder="Full name"/></div>
+                <div>
+                  <label className={fLabel}>Resident</label>
+                  {availableResidents.length > 0 ? (
+                    <select value={candDraft.name} onChange={e => setCandDraft(d => ({ ...d, name: e.target.value }))} className={selCls}>
+                      <option value="">— Select resident —</option>
+                      {availableResidents.map(r => (
+                        <option key={r.id} value={r.owner_name}>{r.owner_name} — Unit {r.unit}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input value={candDraft.name} onChange={e=>setCandDraft(d=>({...d,name:e.target.value}))} className={iCls} placeholder="Full name"/>
+                  )}
+                </div>
                 <div><label className={fLabel}>Bio / Statement</label><textarea value={candDraft.bio} onChange={e=>setCandDraft(d=>({...d,bio:e.target.value}))} rows={2} className={iCls}/></div>
                 <div className="flex gap-2"><Button variant="primary" size="sm" onClick={addCandidate}><Check size={11}/>Add</Button><Button variant="ghost" size="sm" onClick={()=>setShowCandForm(false)}>Cancel</Button></div>
               </div>
@@ -790,6 +804,11 @@ export function ElectionsPage({ onNavigate }) {
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
+  const [residents, setResidents] = useState([]);
+
+  useEffect(() => {
+    residentAPI.list(COMMUNITY_ID).then(res => setResidents(res.data || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     electionsAPI.list(COMMUNITY_ID).then(res => {
@@ -845,8 +864,8 @@ export function ElectionsPage({ onNavigate }) {
                 <div><label className={fLabel}>Status</label><select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} className={selCls}>{['upcoming','active','closed'].map(t=><option key={t}>{t}</option>)}</select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={fLabel}>Start Date</label><input value={form.startDate} onChange={e=>setForm(p=>({...p,startDate:e.target.value}))} placeholder="Nov 1, 2026" className={iCls}/></div>
-                <div><label className={fLabel}>End Date</label><input value={form.endDate} onChange={e=>setForm(p=>({...p,endDate:e.target.value}))} placeholder="Nov 30, 2026" className={iCls}/></div>
+                <div><label className={fLabel}>Start Date</label><input type="date" value={form.startDate} onChange={e=>setForm(p=>({...p,startDate:e.target.value}))} className={iCls}/></div>
+                <div><label className={fLabel}>End Date</label><input type="date" value={form.endDate} onChange={e=>setForm(p=>({...p,endDate:e.target.value}))} className={iCls}/></div>
               </div>
               <div><label className={fLabel}>Description</label><textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={3} className={iCls}/></div>
               <div className="grid grid-cols-2 gap-3">
@@ -924,7 +943,7 @@ export function ElectionsPage({ onNavigate }) {
         )}
         {selected && (
           <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
-            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} onBallots={onNavigate ? ()=>onNavigate('ballots') : null}/>
+            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} onBallots={onNavigate ? ()=>onNavigate('ballots') : null} residents={residents}/>
           </div>
         )}
       </Card>
