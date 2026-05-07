@@ -49,7 +49,7 @@ app.get('/api/ping', async (req, res) => {
 });
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(err.status||500).json({ message: process.env.NODE_ENV==='production' ? 'Internal server error' : err.message });
+  res.status(err.status||500).json({ message: err.message });
 });
 
 async function start() {
