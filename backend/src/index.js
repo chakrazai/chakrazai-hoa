@@ -39,9 +39,17 @@ app.use('/api/tax',            taxRouter);
 app.use('/api/elections',      electionsRouter);
 
 app.get('/health', (req, res) => res.json({ status:'ok', ts: new Date().toISOString() }));
+app.get('/api/ping', async (req, res) => {
+  try {
+    await db.query('SELECT 1');
+    res.json({ db: 'ok', jwt: !!process.env.JWT_SECRET, env: process.env.NODE_ENV });
+  } catch (err) {
+    res.status(500).json({ db: 'error', message: err.message });
+  }
+});
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(err.status||500).json({ error: process.env.NODE_ENV==='production' ? 'Internal server error' : err.message });
+  res.status(err.status||500).json({ message: process.env.NODE_ENV==='production' ? 'Internal server error' : err.message });
 });
 
 async function start() {
@@ -62,20 +70,24 @@ async function start() {
        ON CONFLICT (email) DO NOTHING RETURNING id`,
       [hash]
     );
-    const commRes = await db.query(
-      `INSERT INTO communities (name, units, type, state, tier)
-       VALUES ('Oakwood Estates HOA', 148, 'Self-managed', 'California', 'Full Service')
-       ON CONFLICT (name) DO NOTHING RETURNING id`
-    );
-    if (userRes.rows[0] && commRes.rows[0]) {
+    const existingComm = await db.query(`SELECT id FROM communities WHERE name = 'Oakwood Estates HOA' LIMIT 1`);
+    let commId = existingComm.rows[0]?.id;
+    if (!commId) {
+      const commRes = await db.query(
+        `INSERT INTO communities (name, units, type, state, tier)
+         VALUES ('Oakwood Estates HOA', 148, 'Self-managed', 'California', 'Full Service')
+         RETURNING id`
+      );
+      commId = commRes.rows[0].id;
+    }
+    const userId = userRes.rows[0]?.id ?? (await db.query(`SELECT id FROM users WHERE email = 'admin@demo.com'`)).rows[0]?.id;
+    if (userId && commId) {
       await db.query(
         `INSERT INTO user_communities (user_id, community_id, role)
          VALUES ($1, $2, 'board_president') ON CONFLICT DO NOTHING`,
-        [userRes.rows[0].id, commRes.rows[0].id]
+        [userId, commId]
       );
-      console.log('✅ Default admin seeded: admin@demo.com / password123');
-    } else {
-      console.log('✅ Seed check complete (records already exist)');
+      console.log('✅ Seed complete: admin@demo.com / password123 → community', commId);
     }
   } catch (err) {
     console.error('⚠️  Seed warning:', err.message);
