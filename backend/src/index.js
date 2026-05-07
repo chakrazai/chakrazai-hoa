@@ -52,6 +52,35 @@ async function start() {
   } catch (err) {
     console.error('⚠️  Migration warning:', err.message);
   }
+
+  try {
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash('password123', 12);
+    const userRes = await db.query(
+      `INSERT INTO users (email, password_hash, first_name, last_name, role)
+       VALUES ('admin@demo.com', $1, 'Jane', 'Ramirez', 'board_president')
+       ON CONFLICT (email) DO NOTHING RETURNING id`,
+      [hash]
+    );
+    const commRes = await db.query(
+      `INSERT INTO communities (name, units, type, state, tier)
+       VALUES ('Oakwood Estates HOA', 148, 'Self-managed', 'California', 'Full Service')
+       ON CONFLICT (name) DO NOTHING RETURNING id`
+    );
+    if (userRes.rows[0] && commRes.rows[0]) {
+      await db.query(
+        `INSERT INTO user_communities (user_id, community_id, role)
+         VALUES ($1, $2, 'board_president') ON CONFLICT DO NOTHING`,
+        [userRes.rows[0].id, commRes.rows[0].id]
+      );
+      console.log('✅ Default admin seeded: admin@demo.com / password123');
+    } else {
+      console.log('✅ Seed check complete (records already exist)');
+    }
+  } catch (err) {
+    console.error('⚠️  Seed warning:', err.message);
+  }
+
   app.listen(PORT, () => console.log(`✅ HOAConnect API running on http://localhost:${PORT}`));
 }
 
