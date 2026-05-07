@@ -30,7 +30,7 @@ function Avatar({ name, size = 'md', color = 'bg-navy-700' }) {
 }
 
 function ActivityLogTable({ log }) {
-  if (!log.length) return <p className="text-sm text-slate-400 italic py-4">No activity recorded</p>;
+  if (!log?.length) return <p className="text-sm text-slate-400 italic py-4">No activity recorded</p>;
   return (
     <Table>
       <thead><tr><Th>Date</Th><Th>Action</Th><Th>Details</Th><Th>By</Th></tr></thead>
@@ -790,7 +790,7 @@ export function ElectionsPage() {
 
   useEffect(() => {
     electionsAPI.list(COMMUNITY_ID).then(res => {
-      const data = res.data;
+      const data = res.data.map(e => ({ ...e, activityLog: e.activityLog ?? e.auditLog ?? [] }));
       if (data.length > 0) {
         setElections(data);
         localStorage.setItem(LS_KEY_GOV, JSON.stringify(data));
