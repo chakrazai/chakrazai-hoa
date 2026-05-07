@@ -227,6 +227,23 @@ CREATE TABLE IF NOT EXISTS election_audit_log (
   variant     VARCHAR(50) DEFAULT 'gray',
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS co_owner           VARCHAR(255);
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS address            TEXT;
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS nit_number         VARCHAR(50);
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS move_in_date       VARCHAR(50);
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS move_out_date      VARCHAR(50);
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS hoa_amount         DECIMAL(10,2) DEFAULT 150;
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS hoa_payment_status VARCHAR(50)   DEFAULT 'current';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS balance            DECIMAL(10,2) DEFAULT 0;
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS status             VARCHAR(50)   DEFAULT 'good';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS parking_spaces     JSONB DEFAULT '[]';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS tenants            JSONB DEFAULT '[]';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS relatives          JSONB DEFAULT '[]';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS guest_parking_tags JSONB DEFAULT '[]';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS garage_fobs        JSONB DEFAULT '[]';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS garage_fob_log     JSONB DEFAULT '[]';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS common_area_fobs   JSONB DEFAULT '[]';
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS common_area_fob_log JSONB DEFAULT '[]';
 CREATE INDEX IF NOT EXISTS idx_residents_community    ON residents(community_id);
 CREATE INDEX IF NOT EXISTS idx_dues_community         ON dues_accounts(community_id);
 CREATE INDEX IF NOT EXISTS idx_violations_community   ON violations(community_id);

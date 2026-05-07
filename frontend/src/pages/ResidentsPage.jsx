@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { residentAPI } from '../lib/api';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
   AlertTriangle, Users, ChevronRight, Home, Shield,
@@ -1399,24 +1400,110 @@ function ResidentTable({ residents, onSelect, search, onSearch, statusFilter, on
   );
 }
 
+// ─── DB ↔ frontend shape mappers ─────────────────────────────────────────────
+
+function fromDb(row) {
+  return {
+    id:               row.id,
+    unit:             row.unit,
+    nitNumber:        row.nit_number         || '',
+    address:          row.address            || '',
+    ownerName:        row.owner_name,
+    coOwner:          row.co_owner           || '',
+    phone:            row.phone              || '',
+    email:            row.email              || '',
+    moveInDate:       row.move_in_date       || '',
+    moveOutDate:      row.move_out_date      || '',
+    hoaAmount:        parseFloat(row.hoa_amount)  || 150,
+    hoaPaymentStatus: row.hoa_payment_status || 'current',
+    balance:          parseFloat(row.balance)     || 0,
+    status:           row.status             || 'good',
+    portal:           row.portal_status      || 'none',
+    autoPay:          row.auto_pay           || false,
+    parkingSpaces:    row.parking_spaces     || [],
+    tenants:          row.tenants            || [],
+    relatives:        row.relatives          || [],
+    violations:       [],
+    guestParkingTags: row.guest_parking_tags || [],
+    garageFobs:       row.garage_fobs        || [],
+    garageFobLog:     row.garage_fob_log     || [],
+    commonAreaFobs:   row.common_area_fobs   || [],
+    commonAreaFobLog: row.common_area_fob_log || [],
+  };
+}
+
+function toDb(r) {
+  return {
+    unit:             r.unit,
+    ownerName:        r.ownerName,
+    coOwner:          r.coOwner          || null,
+    nitNumber:        r.nitNumber        || null,
+    address:          r.address          || null,
+    email:            r.email            || null,
+    phone:            r.phone            || null,
+    moveInDate:       r.moveInDate       || null,
+    moveOutDate:      r.moveOutDate      || null,
+    hoaAmount:        r.hoaAmount        || 150,
+    hoaPaymentStatus: r.hoaPaymentStatus || 'current',
+    balance:          r.balance          || 0,
+    status:           r.status           || 'good',
+    portal:           r.portal           || 'none',
+    autoPay:          r.autoPay          || false,
+    parkingSpaces:    r.parkingSpaces    || [],
+    tenants:          r.tenants          || [],
+    relatives:        r.relatives        || [],
+    guestParkingTags: r.guestParkingTags || [],
+    garageFobs:       r.garageFobs       || [],
+    garageFobLog:     r.garageFobLog     || [],
+    commonAreaFobs:   r.commonAreaFobs   || [],
+    commonAreaFobLog: r.commonAreaFobLog || [],
+  };
+}
+
+const COMMUNITY_ID = 1;
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Residents() {
-  const [residents, setResidents]     = useState(SEED_RESIDENTS);
-  const [selected, setSelected]       = useState(null);
-  const [search, setSearch]           = useState('');
+  const [residents, setResidents]       = useState(SEED_RESIDENTS);
+  const [selected, setSelected]         = useState(null);
+  const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const updateResident = (id, patch) => {
-    setResidents(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
-    setSelected(prev => prev?.id === id ? { ...prev, ...patch } : prev);
+  useEffect(() => {
+    residentAPI.list(COMMUNITY_ID)
+      .then(({ data }) => {
+        if (data && data.length > 0) setResidents(data.map(fromDb));
+      })
+      .catch(() => {});
+  }, []);
+
+  const updateResident = async (id, patch) => {
+    const base = residents.find(r => r.id === id) || {};
+    const merged = { ...base, ...patch };
+    setResidents(prev => prev.map(r => r.id === id ? merged : r));
+    setSelected(prev => prev?.id === id ? merged : prev);
+    try {
+      await residentAPI.update(id, toDb(merged));
+    } catch (err) {
+      console.error('Failed to save resident:', err);
+    }
   };
 
-  const addResident = (data) => {
-    setResidents(prev => [...prev, data]);
-    setShowAddModal(false);
-    setSelected(data);
+  const addResident = async (data) => {
+    try {
+      const { data: created } = await residentAPI.create({ ...toDb(data), communityId: COMMUNITY_ID });
+      const resident = fromDb(created);
+      setResidents(prev => [...prev, resident]);
+      setShowAddModal(false);
+      setSelected(resident);
+    } catch {
+      const fallback = { ...data, id: Date.now() };
+      setResidents(prev => [...prev, fallback]);
+      setShowAddModal(false);
+      setSelected(fallback);
+    }
   };
 
   const filtered = useMemo(() => {

@@ -67,6 +67,7 @@ export const residentAPI = {
   list:   (communityId) => api.get(`/api/residents?community=${communityId}`),
   get:    (id)          => api.get(`/api/residents/${id}`),
   create: (data)        => api.post('/api/residents', data),
+  update: (id, data)    => api.put(`/api/residents/${id}`, data),
   invite: (id)          => api.post(`/api/residents/${id}/invite`),
 };
 export const documentAPI = {

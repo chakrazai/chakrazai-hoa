@@ -153,9 +153,51 @@ residentRouter.get('/', async (req, res, next) => {
 });
 residentRouter.post('/', async (req, res, next) => {
   try {
-    const { communityId,unit,ownerName,email,phone } = req.body;
-    const { rows } = await db.query('INSERT INTO residents (community_id,unit,owner_name,email,phone) VALUES ($1,$2,$3,$4,$5) RETURNING *',[communityId,unit,ownerName,email,phone]);
+    const { communityId,unit,ownerName,coOwner,nitNumber,address,email,phone,
+            moveInDate,moveOutDate,hoaAmount,hoaPaymentStatus,balance,status,
+            portal,autoPay,parkingSpaces,tenants,relatives,
+            guestParkingTags,garageFobs,garageFobLog,commonAreaFobs,commonAreaFobLog } = req.body;
+    const { rows } = await db.query(
+      `INSERT INTO residents
+         (community_id,unit,owner_name,co_owner,nit_number,address,email,phone,
+          move_in_date,move_out_date,hoa_amount,hoa_payment_status,balance,status,
+          portal_status,auto_pay,parking_spaces,tenants,relatives,
+          guest_parking_tags,garage_fobs,garage_fob_log,common_area_fobs,common_area_fob_log)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+       RETURNING *`,
+      [communityId,unit,ownerName,coOwner||null,nitNumber||null,address||null,email||null,phone||null,
+       moveInDate||null,moveOutDate||null,hoaAmount||150,hoaPaymentStatus||'current',balance||0,status||'good',
+       portal||'none',autoPay||false,
+       JSON.stringify(parkingSpaces||[]),JSON.stringify(tenants||[]),JSON.stringify(relatives||[]),
+       JSON.stringify(guestParkingTags||[]),JSON.stringify(garageFobs||[]),JSON.stringify(garageFobLog||[]),
+       JSON.stringify(commonAreaFobs||[]),JSON.stringify(commonAreaFobLog||[])]
+    );
     res.status(201).json(rows[0]);
+  } catch (err) { next(err); }
+});
+residentRouter.put('/:id', async (req, res, next) => {
+  try {
+    const { unit,ownerName,coOwner,nitNumber,address,email,phone,
+            moveInDate,moveOutDate,hoaAmount,hoaPaymentStatus,balance,status,
+            portal,autoPay,parkingSpaces,tenants,relatives,
+            guestParkingTags,garageFobs,garageFobLog,commonAreaFobs,commonAreaFobLog } = req.body;
+    const { rows } = await db.query(
+      `UPDATE residents SET
+         unit=$1,owner_name=$2,co_owner=$3,nit_number=$4,address=$5,email=$6,phone=$7,
+         move_in_date=$8,move_out_date=$9,hoa_amount=$10,hoa_payment_status=$11,balance=$12,status=$13,
+         portal_status=$14,auto_pay=$15,parking_spaces=$16,tenants=$17,relatives=$18,
+         guest_parking_tags=$19,garage_fobs=$20,garage_fob_log=$21,common_area_fobs=$22,common_area_fob_log=$23
+       WHERE id=$24 RETURNING *`,
+      [unit,ownerName,coOwner||null,nitNumber||null,address||null,email||null,phone||null,
+       moveInDate||null,moveOutDate||null,hoaAmount||150,hoaPaymentStatus||'current',balance||0,status||'good',
+       portal||'none',autoPay||false,
+       JSON.stringify(parkingSpaces||[]),JSON.stringify(tenants||[]),JSON.stringify(relatives||[]),
+       JSON.stringify(guestParkingTags||[]),JSON.stringify(garageFobs||[]),JSON.stringify(garageFobLog||[]),
+       JSON.stringify(commonAreaFobs||[]),JSON.stringify(commonAreaFobLog||[]),
+       req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ message: 'Resident not found' });
+    res.json(rows[0]);
   } catch (err) { next(err); }
 });
 residentRouter.post('/:id/invite', async (req, res, next) => {
