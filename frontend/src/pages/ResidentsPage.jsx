@@ -28,13 +28,14 @@ const SEED_RESIDENTS = [
     address: '1 Oakwood Drive, Unit 1-A, Sacramento, CA 95814',
     ownerName: 'Alex Thompson', coOwner: 'Jennifer Thompson',
     phone: '(916) 555-0101', email: 'a.thompson@email.com',
-    moveInDate: 'Mar 2018', balance: 0, portal: 'active', autoPay: true, status: 'good',
+    moveInDate: 'Mar 2018', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
     hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-12', 'P-13'],
     violations: [],
     relatives: [
       { id: 1, name: 'Jennifer Thompson', relation: 'Spouse', phone: '(916) 555-0102', email: 'j.thompson@email.com' },
       { id: 2, name: 'Emma Thompson', relation: 'Child', phone: '', email: '' },
     ],
+    tenants: [],
     guestParkingTags: [
       { id: 1, tagId: 'GP-012', issuedDate: 'Jan 15, 2026', expiryDate: 'Jan 15, 2027', licensePlate: 'ABC1234', vehicle: '2022 Toyota Camry', status: 'active' },
     ],
@@ -59,12 +60,13 @@ const SEED_RESIDENTS = [
     address: '12 Oakwood Drive, Unit 12-B, Sacramento, CA 95814',
     ownerName: 'Diana Foster', coOwner: '',
     phone: '(916) 555-0212', email: 'd.foster@email.com',
-    moveInDate: 'Jun 2020', balance: 150, portal: 'invited', autoPay: false, status: 'delinquent',
+    moveInDate: 'Jun 2020', moveOutDate: '', balance: 150, portal: 'invited', autoPay: false, status: 'delinquent',
     hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: ['P-24'],
     violations: [
       { id: 1, type: 'Parking', description: 'Guest spot occupied 7+ days', fine: 50, issuedDate: 'Apr 24, 2026', status: 'hearing_pending' },
     ],
     relatives: [{ id: 1, name: 'Robert Foster', relation: 'Parent', phone: '(916) 555-0300', email: '' }],
+    tenants: [],
     guestParkingTags: [],
     garageFobs: [{ id: 1, fobId: 'GF-024', status: 'active', issuedDate: 'Jun 10, 2020', lastUsed: 'Apr 28, 2026' }],
     garageFobLog: [
@@ -81,12 +83,13 @@ const SEED_RESIDENTS = [
     address: '33 Oakwood Drive, Unit 33-A, Sacramento, CA 95814',
     ownerName: 'Michael Torres', coOwner: 'Rosa Torres',
     phone: '(916) 555-0333', email: 'm.torres@email.com',
-    moveInDate: 'Jan 2016', balance: 900, portal: 'none', autoPay: false, status: 'collections',
+    moveInDate: 'Jan 2016', moveOutDate: '', balance: 900, portal: 'none', autoPay: false, status: 'collections',
     hoaAmount: 150, hoaPaymentStatus: 'collections', parkingSpaces: ['P-33'],
     violations: [
       { id: 1, type: 'Landscaping', description: 'Unapproved front yard modification', fine: 100, issuedDate: 'Apr 22, 2026', status: 'escalated' },
     ],
     relatives: [],
+    tenants: [],
     guestParkingTags: [{ id: 1, tagId: 'GP-033', issuedDate: 'Feb 1, 2026', expiryDate: 'Feb 1, 2027', licensePlate: 'XYZ9876', vehicle: '2019 Honda Civic', status: 'active' }],
     garageFobs: [{ id: 1, fobId: 'GF-033', status: 'suspended', issuedDate: 'Jan 5, 2016', lastUsed: 'Mar 15, 2026' }],
     garageFobLog: [{ id: 1, date: 'Mar 15, 2026', time: '10:22 AM', action: 'Entry', fobId: 'GF-033', gate: 'Gate B' }],
@@ -98,13 +101,14 @@ const SEED_RESIDENTS = [
     address: '42 Oakwood Drive, Unit 42-C, Sacramento, CA 95814',
     ownerName: 'Sarah Chen', coOwner: 'David Chen',
     phone: '(916) 555-0442', email: 's.chen@email.com',
-    moveInDate: 'Sep 2019', balance: 0, portal: 'active', autoPay: true, status: 'good',
+    moveInDate: 'Sep 2019', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
     hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-42', 'P-43'],
     violations: [],
     relatives: [
       { id: 1, name: 'David Chen', relation: 'Spouse', phone: '(916) 555-0443', email: 'd.chen@email.com' },
       { id: 2, name: 'Leo Chen', relation: 'Child', phone: '', email: '' },
     ],
+    tenants: [],
     guestParkingTags: [
       { id: 1, tagId: 'GP-042', issuedDate: 'Mar 1, 2026', expiryDate: 'Mar 1, 2027', licensePlate: 'DEF5678', vehicle: '2021 Subaru Outback', status: 'active' },
     ],
@@ -125,10 +129,11 @@ const SEED_RESIDENTS = [
     address: '44 Oakwood Drive, Unit 44-A, Sacramento, CA 95814',
     ownerName: 'Carlos Rivera', coOwner: '',
     phone: '(916) 555-0544', email: 'c.rivera@email.com',
-    moveInDate: 'Feb 2021', balance: 100, portal: 'active', autoPay: false, status: 'violation',
+    moveInDate: 'Feb 2021', moveOutDate: '', balance: 100, portal: 'active', autoPay: false, status: 'violation',
     hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-44'],
     violations: [{ id: 1, type: 'Noise', description: 'Repeated late-night disturbance', fine: 100, issuedDate: 'Apr 15, 2026', status: 'hearing_scheduled' }],
     relatives: [{ id: 1, name: 'Maria Rivera', relation: 'Parent', phone: '(916) 555-0545', email: '' }],
+    tenants: [],
     guestParkingTags: [],
     garageFobs: [{ id: 1, fobId: 'GF-044', status: 'active', issuedDate: 'Feb 14, 2021', lastUsed: 'May 2, 2026' }],
     garageFobLog: [{ id: 1, date: 'May 2, 2026', time: '11:45 PM', action: 'Entry', fobId: 'GF-044', gate: 'Gate A' }],
@@ -140,10 +145,11 @@ const SEED_RESIDENTS = [
     address: '55 Oakwood Drive, Unit 55-B, Sacramento, CA 95814',
     ownerName: 'Kevin Zhang', coOwner: 'Linda Zhang',
     phone: '(916) 555-0655', email: 'k.zhang@email.com',
-    moveInDate: 'Nov 2017', balance: 150, portal: 'active', autoPay: false, status: 'delinquent',
+    moveInDate: 'Nov 2017', moveOutDate: '', balance: 150, portal: 'active', autoPay: false, status: 'delinquent',
     hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: ['P-55'],
     violations: [],
     relatives: [{ id: 1, name: 'Linda Zhang', relation: 'Spouse', phone: '(916) 555-0656', email: 'l.zhang@email.com' }],
+    tenants: [],
     guestParkingTags: [{ id: 1, tagId: 'GP-055', issuedDate: 'Dec 1, 2025', expiryDate: 'Dec 1, 2026', licensePlate: 'JKL3456', vehicle: '2023 Tesla Model 3', status: 'active' }],
     garageFobs: [{ id: 1, fobId: 'GF-055', status: 'active', issuedDate: 'Nov 3, 2017', lastUsed: 'May 1, 2026' }],
     garageFobLog: [{ id: 1, date: 'May 1, 2026', time: '8:00 AM', action: 'Entry', fobId: 'GF-055', gate: 'Gate B' }],
@@ -155,9 +161,9 @@ const SEED_RESIDENTS = [
     address: '67 Oakwood Drive, Unit 67-A, Sacramento, CA 95814',
     ownerName: 'Amanda Liu', coOwner: '',
     phone: '(916) 555-0767', email: 'a.liu@email.com',
-    moveInDate: 'Apr 2022', balance: 300, portal: 'active', autoPay: false, status: 'delinquent',
+    moveInDate: 'Apr 2022', moveOutDate: '', balance: 300, portal: 'active', autoPay: false, status: 'delinquent',
     hoaAmount: 150, hoaPaymentStatus: 'delinquent', parkingSpaces: ['P-67'],
-    violations: [], relatives: [], guestParkingTags: [],
+    violations: [], relatives: [], tenants: [], guestParkingTags: [],
     garageFobs: [{ id: 1, fobId: 'GF-067', status: 'active', issuedDate: 'Apr 5, 2022', lastUsed: 'Apr 30, 2026' }],
     garageFobLog: [{ id: 1, date: 'Apr 30, 2026', time: '9:30 AM', action: 'Entry', fobId: 'GF-067', gate: 'Gate A' }],
     commonAreaFobs: [{ id: 1, fobId: 'CA-067', areas: 'Gym', status: 'active', issuedDate: 'Apr 5, 2022', lastUsed: 'Apr 15, 2026' }],
@@ -168,13 +174,14 @@ const SEED_RESIDENTS = [
     address: '83 Oakwood Drive, Unit 83-A, Sacramento, CA 95814',
     ownerName: 'Tom Nakamura', coOwner: 'Yuki Nakamura',
     phone: '(916) 555-0883', email: 't.nakamura@email.com',
-    moveInDate: 'Jul 2015', balance: 0, portal: 'active', autoPay: true, status: 'good',
+    moveInDate: 'Jul 2015', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
     hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-83', 'P-84'],
     violations: [],
     relatives: [
       { id: 1, name: 'Yuki Nakamura', relation: 'Spouse', phone: '(916) 555-0884', email: 'y.nakamura@email.com' },
       { id: 2, name: 'Hiro Nakamura', relation: 'Child', phone: '', email: '' },
     ],
+    tenants: [],
     guestParkingTags: [{ id: 1, tagId: 'GP-083', issuedDate: 'Jan 1, 2026', expiryDate: 'Jan 1, 2027', licensePlate: 'MNO7890', vehicle: '2020 Lexus RX', status: 'active' }],
     garageFobs: [
       { id: 1, fobId: 'GF-083', status: 'active', issuedDate: 'Jul 10, 2015', lastUsed: 'May 2, 2026' },
@@ -195,10 +202,11 @@ const SEED_RESIDENTS = [
     address: '88 Oakwood Drive, Unit 88-B, Sacramento, CA 95814',
     ownerName: 'Laura Kim', coOwner: '',
     phone: '(916) 555-0988', email: 'l.kim@email.com',
-    moveInDate: 'Aug 2023', balance: 150, portal: 'active', autoPay: false, status: 'delinquent',
+    moveInDate: 'Aug 2023', moveOutDate: '', balance: 150, portal: 'active', autoPay: false, status: 'delinquent',
     hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: ['P-88'],
     violations: [{ id: 1, type: 'Parking', description: 'Vehicle in fire lane', fine: 75, issuedDate: 'Apr 26, 2026', status: 'notice_sent' }],
     relatives: [{ id: 1, name: 'James Kim', relation: 'Sibling', phone: '(916) 555-0989', email: 'j.kim@email.com' }],
+    tenants: [],
     guestParkingTags: [],
     garageFobs: [{ id: 1, fobId: 'GF-088', status: 'active', issuedDate: 'Aug 15, 2023', lastUsed: 'May 2, 2026' }],
     garageFobLog: [{ id: 1, date: 'May 2, 2026', time: '10:05 AM', action: 'Entry', fobId: 'GF-088', gate: 'Gate B' }],
@@ -210,13 +218,14 @@ const SEED_RESIDENTS = [
     address: '119 Oakwood Drive, Unit 119-A, Sacramento, CA 95814',
     ownerName: 'Maria Garcia', coOwner: 'Jose Garcia',
     phone: '(916) 555-1190', email: 'm.garcia@email.com',
-    moveInDate: 'May 2014', balance: 0, portal: 'active', autoPay: true, status: 'good',
+    moveInDate: 'May 2014', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
     hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-119', 'P-120'],
     violations: [],
     relatives: [
       { id: 1, name: 'Jose Garcia', relation: 'Spouse', phone: '(916) 555-1191', email: 'j.garcia@email.com' },
       { id: 2, name: 'Sofia Garcia', relation: 'Child', phone: '(916) 555-1192', email: 's.garcia@email.com' },
     ],
+    tenants: [],
     guestParkingTags: [{ id: 1, tagId: 'GP-119', issuedDate: 'Feb 1, 2026', expiryDate: 'Feb 1, 2027', licensePlate: 'PQR2345', vehicle: '2022 BMW 3 Series', status: 'active' }],
     garageFobs: [
       { id: 1, fobId: 'GF-119', status: 'active', issuedDate: 'May 1, 2014', lastUsed: 'May 2, 2026' },
@@ -284,10 +293,10 @@ function TabEditBar({ editing, onEdit, onSave, onCancel }) {
 
 const EMPTY_FORM = {
   unit: '', nitNumber: '', address: '', ownerName: '', coOwner: '',
-  phone: '', email: '', moveInDate: '', hoaAmount: 150,
+  phone: '', email: '', moveInDate: '', moveOutDate: '', hoaAmount: 150,
   hoaPaymentStatus: 'current', portal: 'none', autoPay: false,
   status: 'good', balance: 0, parkingSpaces: [],
-  violations: [], relatives: [], guestParkingTags: [],
+  violations: [], relatives: [], tenants: [], guestParkingTags: [],
   garageFobs: [], garageFobLog: [], commonAreaFobs: [], commonAreaFobLog: [],
 };
 
@@ -383,11 +392,18 @@ function AddResidentModal({ onSave, onClose }) {
           {/* HOA */}
           <div>
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">HOA Details</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className={fLabel}>Move-in Date</label>
-                <input value={form.moveInDate} onChange={e => set('moveInDate')(e.target.value)} placeholder="e.g. Jan 2025" className={iCls()} />
+                <input type="date" value={form.moveInDate} onChange={e => set('moveInDate')(e.target.value)} className={iCls()} />
               </div>
+              <div>
+                <label className={fLabel}>Move-out Date</label>
+                <input type="date" value={form.moveOutDate} onChange={e => set('moveOutDate')(e.target.value)} className={iCls()} />
+                <p className="text-[11px] text-slate-400 mt-0.5">(leave blank if still residing)</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={fLabel}>Monthly HOA ($)</label>
                 <input type="number" min="0" value={form.hoaAmount} onChange={e => set('hoaAmount')(Number(e.target.value))} className={iCls()} />
@@ -452,7 +468,8 @@ function OverviewTab({ r, onUpdate }) {
     setDraft({
       phone: r.phone, email: r.email, address: r.address,
       ownerName: r.ownerName, coOwner: r.coOwner || '',
-      moveInDate: r.moveInDate, portal: r.portal, autoPay: r.autoPay,
+      moveInDate: r.moveInDate, moveOutDate: r.moveOutDate || '',
+      portal: r.portal, autoPay: r.autoPay,
     });
     setEditing(true);
   };
@@ -483,7 +500,11 @@ function OverviewTab({ r, onUpdate }) {
               <option value="active">Active</option>
             </select>
           </div>
-          <div><label className={fLabel}>Move-in Date</label><input value={draft.moveInDate} onChange={e => d('moveInDate')(e.target.value)} className={iCls()} /></div>
+          <div />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className={fLabel}>Move-in Date</label><input type="date" value={draft.moveInDate} onChange={e => d('moveInDate')(e.target.value)} className={iCls()} /></div>
+          <div><label className={fLabel}>Move-out Date</label><input type="date" value={draft.moveOutDate} onChange={e => d('moveOutDate')(e.target.value)} className={iCls()} /></div>
         </div>
         <div className="flex items-center gap-2">
           <input type="checkbox" id="ep-ap" checked={draft.autoPay} onChange={e => d('autoPay')(e.target.checked)} className="w-4 h-4 rounded border-slate-300" />
