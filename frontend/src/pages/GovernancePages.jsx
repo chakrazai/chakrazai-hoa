@@ -641,9 +641,14 @@ function ResultsEntry({ election, onUpdate }) {
 function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = [] }) {
   const [tab, setTab] = useState('overview');
   const [showCandForm, setShowCandForm] = useState(false);
-  const [candDraft, setCandDraft] = useState({ name:'', bio:'' });
+  const [candDraft, setCandDraft] = useState({ name:'', unit:'', email:'', phone:'', bio:'' });
   const existingNames = new Set((election.candidates || []).map(c => c.name));
   const availableResidents = residents.filter(r => !existingNames.has(r.owner_name));
+
+  const selectResident = (ownerName) => {
+    const r = residents.find(x => x.owner_name === ownerName);
+    setCandDraft(d => ({ ...d, name: ownerName, unit: r?.unit || '', email: r?.email || '', phone: r?.phone || '' }));
+  };
 
   const tabs = [
     { id:'overview',    label:'Overview' },
@@ -658,7 +663,7 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
   const addCandidate = () => {
     if (!candDraft.name.trim()) return;
     onUpdate({ candidates: [...election.candidates, { ...candDraft, id: Date.now(), votes: 0, elected: false }] });
-    setCandDraft({ name:'', bio:'' });
+    setCandDraft({ name:'', unit:'', email:'', phone:'', bio:'' });
     setShowCandForm(false);
   };
 
@@ -747,7 +752,7 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
                 <div>
                   <label className={fLabel}>Resident</label>
                   {availableResidents.length > 0 ? (
-                    <select value={candDraft.name} onChange={e => setCandDraft(d => ({ ...d, name: e.target.value }))} className={selCls}>
+                    <select value={candDraft.name} onChange={e => selectResident(e.target.value)} className={selCls}>
                       <option value="">— Select resident —</option>
                       {availableResidents.map(r => (
                         <option key={r.id} value={r.owner_name}>{r.owner_name} — Unit {r.unit}</option>
@@ -757,8 +762,15 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
                     <input value={candDraft.name} onChange={e=>setCandDraft(d=>({...d,name:e.target.value}))} className={iCls} placeholder="Full name"/>
                   )}
                 </div>
+                {candDraft.name && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><label className={fLabel}>Unit</label><input value={candDraft.unit} onChange={e=>setCandDraft(d=>({...d,unit:e.target.value}))} className={iCls} placeholder="—"/></div>
+                    <div><label className={fLabel}>Email</label><input value={candDraft.email} onChange={e=>setCandDraft(d=>({...d,email:e.target.value}))} className={iCls} placeholder="—"/></div>
+                    <div><label className={fLabel}>Phone</label><input value={candDraft.phone} onChange={e=>setCandDraft(d=>({...d,phone:e.target.value}))} className={iCls} placeholder="—"/></div>
+                  </div>
+                )}
                 <div><label className={fLabel}>Bio / Statement</label><textarea value={candDraft.bio} onChange={e=>setCandDraft(d=>({...d,bio:e.target.value}))} rows={2} className={iCls}/></div>
-                <div className="flex gap-2"><Button variant="primary" size="sm" onClick={addCandidate}><Check size={11}/>Add</Button><Button variant="ghost" size="sm" onClick={()=>setShowCandForm(false)}>Cancel</Button></div>
+                <div className="flex gap-2"><Button variant="primary" size="sm" onClick={addCandidate}><Check size={11}/>Add</Button><Button variant="ghost" size="sm" onClick={()=>{setShowCandForm(false);setCandDraft({name:'',unit:'',email:'',phone:'',bio:''});}}>Cancel</Button></div>
               </div>
             )}
             <div className="space-y-3">
@@ -774,6 +786,11 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
                         {election.status === 'closed' && !c.elected && <Badge variant="gray">Not Elected</Badge>}
                         {election.status !== 'closed' && <Badge variant="blue">Candidate</Badge>}
                       </div>
+                    </div>
+                    <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                      {c.unit  && <span className="text-[11px] text-slate-400">Unit {c.unit}</span>}
+                      {c.email && <span className="text-[11px] text-slate-400">{c.email}</span>}
+                      {c.phone && <span className="text-[11px] text-slate-400">{c.phone}</span>}
                     </div>
                     {c.bio && <p className="text-xs text-slate-500 mb-2">{c.bio}</p>}
                     {election.status !== 'upcoming' && (
