@@ -5,7 +5,8 @@ const helmet     = require('helmet');
 const morgan     = require('morgan');
 const rateLimit  = require('express-rate-limit');
 
-const authRoutes = require('./routes/auth');
+const authRoutes      = require('./routes/auth');
+const electionsRouter = require('./routes/elections');
 const {
   communityRouter, duesRouter, complianceRouter, violationsRouter,
   maintenanceRouter, vendorRouter, residentRouter, documentRouter,
@@ -34,6 +35,7 @@ app.use('/api/documents',      documentRouter);
 app.use('/api/communications', commRouter);
 app.use('/api/accounting',     accountingRouter);
 app.use('/api/tax',            taxRouter);
+app.use('/api/elections',      electionsRouter);
 
 app.get('/health', (req, res) => res.json({ status:'ok', ts: new Date().toISOString() }));
 app.use((err, req, res, next) => {

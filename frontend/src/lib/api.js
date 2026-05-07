@@ -87,3 +87,13 @@ export const taxAPI = {
   documents: (communityId) => api.get(`/api/tax?community=${communityId}`),
   download:  (docId)       => api.get(`/api/tax/${docId}/download`, { responseType: 'blob' }),
 };
+export const electionsAPI = {
+  list:            (communityId) => api.get(`/api/elections?community=${communityId}`),
+  create:          (data)        => api.post('/api/elections', data),
+  update:          (id, data)    => api.patch(`/api/elections/${id}`, data),
+  addCandidate:    (id, data)    => api.post(`/api/elections/${id}/candidates`, data),
+  updateCandidate: (id, cid, d)  => api.patch(`/api/elections/${id}/candidates/${cid}`, d),
+  addAudit:        (id, data)    => api.post(`/api/elections/${id}/audit`, data),
+  addNotice:       (id, data)    => api.post(`/api/elections/${id}/notices`, data),
+  addReceipt:      (id, data)    => api.post(`/api/elections/${id}/receipts`, data),
+};

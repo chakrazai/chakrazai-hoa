@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, Badge, Button, MetricCard, Alert } from '../components/ui';
+import { electionsAPI, residentAPI } from '../lib/api';
 
 // ─── RBAC ─────────────────────────────────────────────────────────────────────
 const ROLES = {
@@ -607,7 +608,7 @@ function EligibilityPanel({ candidateUnit, currentReasons, role, onSave, onClose
   );
 }
 
-function NominationsTab({ election, role, onUpdate, addAudit }) {
+function NominationsTab({ election, role, onUpdate, addAudit, residents = SAMPLE_RESIDENTS }) {
   const [showForm,      setShowForm]      = useState(false);
   const [resident,      setResident]      = useState(null);
   const [disqChecks,    setDisqChecks]    = useState(mkDisqChecks());
@@ -734,7 +735,7 @@ function NominationsTab({ election, role, onUpdate, addAudit }) {
 
           <div>
             <label className={fLabel}>Resident Name *</label>
-            <ResidentCombobox selected={resident} onSelect={handleResidentSelect} residents={SAMPLE_RESIDENTS}/>
+            <ResidentCombobox selected={resident} onSelect={handleResidentSelect} residents={residents}/>
           </div>
 
           {resident && (
@@ -1840,7 +1841,7 @@ function EnvelopesTab({ election, role }) {
 }
 
 // ─── Election detail (tab router) ─────────────────────────────────────────────
-function ElectionDetail({ election, role, onUpdate, onClose }) {
+function ElectionDetail({ election, role, onUpdate, onClose, apiResidents }) {
   const [tab, setTab] = useState('overview');
 
   const addAudit = useCallback((action, details, variant = 'gray') => {
@@ -1890,7 +1891,7 @@ function ElectionDetail({ election, role, onUpdate, onClose }) {
       <div className="flex-1 overflow-y-auto px-5 pb-6">
         {tab === 'overview'    && <OverviewTab    election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'timeline'    && <TimelineTab    election={election}/>}
-        {tab === 'nominations' && <NominationsTab election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'nominations' && <NominationsTab election={election} role={role} onUpdate={onUpdate} addAudit={addAudit} residents={apiResidents?.length ? apiResidents : SAMPLE_RESIDENTS}/>}
         {tab === 'inspector'   && <InspectorTab   election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'counting'    && <CountingTab    election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'notices'     && <NoticesTab     election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
@@ -1997,25 +1998,97 @@ function CreateModal({ onClose, onCreate, role }) {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+const COMMUNITY_ID = 1;
+const LS_KEY = 'hoa_elections_v2';
+
 export default function BallotManagementPage() {
-  const [elections, setElections] = useState(SEED);
+  const [elections, setElections] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LS_KEY);
+      return saved ? JSON.parse(saved) : SEED;
+    } catch { return SEED; }
+  });
+  const [apiReady,    setApiReady]    = useState(false);
+  const [apiResidents, setApiResidents] = useState([]);
   const [selected, setSelected]   = useState(null);
   const [role, setRole]           = useState('manager');
   const [search, setSearch]       = useState('');
   const [showCreate, setShowCreate] = useState(false);
 
+  // Load elections from API on mount
+  useEffect(() => {
+    electionsAPI.list(COMMUNITY_ID)
+      .then(r => {
+        if (r.data?.length > 0) {
+          setElections(r.data);
+          try { localStorage.setItem(LS_KEY, JSON.stringify(r.data)); } catch {}
+        }
+        setApiReady(true);
+      })
+      .catch(() => setApiReady(true));
+    // Also try to load real residents for nominations dropdown
+    residentAPI.list(COMMUNITY_ID)
+      .then(r => { if (r.data?.length) setApiResidents(r.data.map(r => ({
+        unit: r.unit, name: r.owner_name, email: r.email, phone: r.phone,
+        address1: '', city: '', state: 'CA', zip: '',
+        isDelinquent: false, hasViolation: false, isOwnerResident: true,
+      }))); })
+      .catch(() => {});
+  }, []);
+
+  // Persist to localStorage whenever elections change
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(elections)); } catch {}
+  }, [elections]);
+
   const update = (id, patch) => {
+    const election = elections.find(e => e.id === id);
     setElections(p => p.map(e => e.id === id ? { ...e, ...patch } : e));
     setSelected(p => p?.id === id ? { ...p, ...patch } : p);
+
+    if (!election || !apiReady) return;
+    if (patch.candidates) {
+      const existing = election.candidates || [];
+      // New candidates not in existing list
+      patch.candidates
+        .filter(c => !existing.find(ec => ec.id === c.id))
+        .forEach(c => electionsAPI.addCandidate(id, c).catch(() => {}));
+      // Updated candidates
+      patch.candidates
+        .filter(c => {
+          const ec = existing.find(e => e.id === c.id);
+          return ec && (ec.eligible !== c.eligible || ec.disqualified !== c.disqualified ||
+            JSON.stringify(ec.disqReasons) !== JSON.stringify(c.disqReasons) ||
+            ec.votes !== c.votes || ec.elected !== c.elected || ec.statement !== c.statement);
+        })
+        .forEach(c => electionsAPI.updateCandidate(id, c.id, c).catch(() => {}));
+      // Sync non-candidate fields in the same patch
+      const { candidates: _c, ...rest } = patch;
+      if (Object.keys(rest).length) electionsAPI.update(id, rest).catch(() => {});
+    } else if (patch.ballotReceiptLog) {
+      // New receipt entries
+      const existing = election.ballotReceiptLog || [];
+      patch.ballotReceiptLog
+        .filter(r => !existing.find(er => er.unit === r.unit && er.received === r.received))
+        .forEach(r => electionsAPI.addReceipt(id, { unit: r.unit, receivedDate: r.received }).catch(() => {}));
+      const { ballotReceiptLog: _r, ...rest } = patch;
+      if (Object.keys(rest).length) electionsAPI.update(id, rest).catch(() => {});
+    } else if (patch.notices) {
+      const existing = election.notices || [];
+      patch.notices
+        .filter(n => !existing.find(en => en.type === n.type && en.sentDate === n.sentDate))
+        .forEach(n => electionsAPI.addNotice(id, n).catch(() => {}));
+      const { notices: _n, ...rest } = patch;
+      if (Object.keys(rest).length) electionsAPI.update(id, rest).catch(() => {});
+    } else {
+      electionsAPI.update(id, patch).catch(() => {});
+    }
   };
 
-  const create = form => {
-    const retYrs = 1;
+  const create = async form => {
+    const tempId = Date.now();
     const b = {
-      ...form,
-      id: Date.now(),
-      stage: 'draft',
-      votingMethod: form.votingMethod,
+      ...form, id: tempId, stage: 'draft',
       ballotsDistributed: 0, ballotsReceived: 0,
       dates: { nominationsOpen: null, nominationReminder: null, nominationsClose: null, optInDeadline: null, preBallotNotice: null, ballotDistribution: null, votingDeadline: null, countingMeeting: null, retentionExpiry: null },
       inspector: null, candidates: [], ballotInstructions: '', ballotReceiptLog: [],
@@ -2028,6 +2101,13 @@ export default function BallotManagementPage() {
     setElections(p => [b, ...p]);
     setSelected(b);
     setShowCreate(false);
+    // Persist to DB; swap temp id with real DB id on success
+    try {
+      const r = await electionsAPI.create({ communityId: COMMUNITY_ID, ...form });
+      const dbElection = r.data;
+      setElections(p => p.map(e => e.id === tempId ? { ...b, ...dbElection, id: dbElection.id } : e));
+      setSelected(p => p?.id === tempId ? { ...b, ...dbElection, id: dbElection.id } : p);
+    } catch {}
   };
 
   const filtered = useMemo(() => elections.filter(e =>
@@ -2127,7 +2207,7 @@ export default function BallotManagementPage() {
 
             {selected && (
               <div className="flex-1 overflow-hidden" style={{ height: 'calc(100vh - 280px)' }}>
-                <ElectionDetail election={selected} role={role} onUpdate={p => update(selected.id, p)} onClose={() => setSelected(null)}/>
+                <ElectionDetail election={selected} role={role} onUpdate={p => update(selected.id, p)} onClose={() => setSelected(null)} apiResidents={apiResidents}/>
               </div>
             )}
           </Card>

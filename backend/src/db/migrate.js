@@ -173,6 +173,99 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Elections
+CREATE TABLE IF NOT EXISTS elections (
+  id                        SERIAL PRIMARY KEY,
+  community_id              INTEGER REFERENCES communities(id) ON DELETE CASCADE,
+  title                     VARCHAR(500) NOT NULL,
+  type                      VARCHAR(100) DEFAULT 'board_director',
+  stage                     VARCHAR(100) DEFAULT 'draft',
+  seats_available           INTEGER DEFAULT 3,
+  voting_method             VARCHAR(50)  DEFAULT 'hybrid',
+  quorum_required           BOOLEAN      DEFAULT true,
+  quorum_pct                INTEGER      DEFAULT 25,
+  total_eligible            INTEGER      DEFAULT 0,
+  ballots_distributed       INTEGER      DEFAULT 0,
+  ballots_received          INTEGER      DEFAULT 0,
+  description               TEXT,
+  ballot_instructions       TEXT,
+  nom_open                  VARCHAR(100),
+  nom_reminder              VARCHAR(100),
+  nom_close                 VARCHAR(100),
+  opt_in_deadline           VARCHAR(100),
+  pre_ballot_notice         VARCHAR(100),
+  ballot_dist_date          VARCHAR(100),
+  voting_deadline           VARCHAR(100),
+  counting_meeting_date     VARCHAR(100),
+  retention_expiry          VARCHAR(100),
+  inspector_name            VARCHAR(255),
+  inspector_firm            VARCHAR(255),
+  inspector_contact         VARCHAR(255),
+  inspector_assigned_date   VARCHAR(100),
+  inspector_conflict_checked BOOLEAN     DEFAULT false,
+  acclamation_declared      BOOLEAN      DEFAULT false,
+  quorum_met                BOOLEAN,
+  results                   JSONB,
+  certified_date            VARCHAR(100),
+  retention_status          VARCHAR(50)  DEFAULT 'active',
+  destroy_date              VARCHAR(100),
+  created_at                TIMESTAMPTZ  DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ  DEFAULT NOW()
+);
+
+-- Election candidates
+CREATE TABLE IF NOT EXISTS election_candidates (
+  id              SERIAL PRIMARY KEY,
+  election_id     INTEGER REFERENCES elections(id) ON DELETE CASCADE,
+  name            VARCHAR(255) NOT NULL,
+  unit            VARCHAR(50),
+  email           VARCHAR(255),
+  phone           VARCHAR(50),
+  bio             TEXT,
+  nominated_date  VARCHAR(100),
+  disq_reasons    TEXT[]  DEFAULT '{}',
+  disqualified    BOOLEAN DEFAULT false,
+  eligible        BOOLEAN DEFAULT true,
+  override_reason TEXT,
+  statement       TEXT,
+  votes           INTEGER DEFAULT 0,
+  elected         BOOLEAN DEFAULT false,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Election notices log
+CREATE TABLE IF NOT EXISTS election_notices (
+  id              SERIAL PRIMARY KEY,
+  election_id     INTEGER REFERENCES elections(id) ON DELETE CASCADE,
+  type            VARCHAR(100),
+  sent_date       VARCHAR(100),
+  recipient_count INTEGER     DEFAULT 0,
+  method          VARCHAR(100),
+  status          VARCHAR(50) DEFAULT 'sent',
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ballot receipt log
+CREATE TABLE IF NOT EXISTS ballot_receipts (
+  id            SERIAL PRIMARY KEY,
+  election_id   INTEGER REFERENCES elections(id) ON DELETE CASCADE,
+  unit          VARCHAR(50),
+  received_date VARCHAR(100),
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Election audit log
+CREATE TABLE IF NOT EXISTS election_audit_log (
+  id          SERIAL PRIMARY KEY,
+  election_id INTEGER REFERENCES elections(id) ON DELETE CASCADE,
+  ts          VARCHAR(100),
+  action      VARCHAR(255),
+  details     TEXT,
+  by_user     VARCHAR(255),
+  variant     VARCHAR(50) DEFAULT 'gray',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_residents_community     ON residents(community_id);
 CREATE INDEX IF NOT EXISTS idx_dues_community          ON dues_accounts(community_id);
@@ -181,6 +274,11 @@ CREATE INDEX IF NOT EXISTS idx_work_orders_community   ON work_orders(community_
 CREATE INDEX IF NOT EXISTS idx_vendors_community       ON vendors(community_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_community  ON transactions(community_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_state        ON compliance_alerts(state);
+CREATE INDEX IF NOT EXISTS idx_elections_community     ON elections(community_id);
+CREATE INDEX IF NOT EXISTS idx_candidates_election     ON election_candidates(election_id);
+CREATE INDEX IF NOT EXISTS idx_notices_election        ON election_notices(election_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_election       ON ballot_receipts(election_id);
+CREATE INDEX IF NOT EXISTS idx_audit_election          ON election_audit_log(election_id);
 `;
 
 async function migrate() {
