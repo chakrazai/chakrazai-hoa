@@ -3,7 +3,7 @@ import {
   Users, Vote, CalendarDays, Plus, X, Check, Edit2, Trash2,
   ChevronRight, Phone, Mail, Clock, MapPin, FileText,
   CheckCircle, XCircle, AlertCircle, Activity, Shield,
-  Search, BarChart2, User, Printer, Award, ClipboardList,
+  Search, BarChart2, User, Printer, Award, ClipboardList, ExternalLink,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
@@ -638,7 +638,7 @@ function ResultsEntry({ election, onUpdate }) {
   );
 }
 
-function ElectionDetail({ election, onUpdate, onClose }) {
+function ElectionDetail({ election, onUpdate, onClose, onBallots }) {
   const [tab, setTab] = useState('overview');
   const [showCandForm, setShowCandForm] = useState(false);
   const [candDraft, setCandDraft] = useState({ name:'', bio:'' });
@@ -668,7 +668,10 @@ function ElectionDetail({ election, onUpdate, onClose }) {
             <div className="flex items-center gap-2 mb-1"><h2 className="text-sm font-bold text-slate-900">{election.title}</h2><Badge variant={st.c}>{st.l}</Badge></div>
             <p className="text-xs text-slate-400">{election.type} · {election.startDate} – {election.endDate}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"><X size={14}/></button>
+          <div className="flex items-center gap-1">
+            {onBallots && <button onClick={onBallots} className="text-xs text-navy-600 hover:text-navy-800 font-medium px-2 py-1 rounded-lg hover:bg-navy-50 transition-colors flex items-center gap-1"><ClipboardList size={11}/>Full Workflow</button>}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"><X size={14}/></button>
+          </div>
         </div>
       </div>
       <div className="px-5 pt-3 flex-shrink-0"><Tabs tabs={tabs} activeTab={tab} onChange={setTab}/></div>
@@ -780,7 +783,7 @@ function ElectionDetail({ election, onUpdate, onClose }) {
 const COMMUNITY_ID = 1;
 const LS_KEY_GOV = 'hoa_elections_gov_v1';
 
-export function ElectionsPage() {
+export function ElectionsPage({ onNavigate }) {
   const [elections, setElections] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || SEED_ELECTIONS; } catch { return SEED_ELECTIONS; }
   });
@@ -921,7 +924,7 @@ export function ElectionsPage() {
         )}
         {selected && (
           <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
-            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)}/>
+            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} onBallots={onNavigate ? ()=>onNavigate('ballots') : null}/>
           </div>
         )}
       </Card>

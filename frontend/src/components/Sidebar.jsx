@@ -32,7 +32,8 @@ const navGroups = [
   ]},
   { label: 'Governance', items: [
     { id: 'boardmembers', Icon: UserCheck,     label: 'Board Members' },
-    { id: 'elections',    Icon: Vote,          label: 'Elections & Ballots' },
+    { id: 'elections',    Icon: Vote,          label: 'Elections' },
+    { id: 'ballots',      Icon: ClipboardList, label: 'Ballot Management' },
     { id: 'meetings',     Icon: CalendarDays,  label: 'Meetings' },
   ]},
 ];
