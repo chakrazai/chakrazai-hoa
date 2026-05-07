@@ -8,7 +8,6 @@ import {
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
 import { electionsAPI, residentAPI } from '../lib/api';
-import BallotManagementPage from './BallotManagementPage.jsx';
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -848,7 +847,6 @@ const COMMUNITY_ID = 1;
 const LS_KEY_GOV = 'hoa_elections_gov_v1';
 
 export function ElectionsPage() {
-  const [pageTab, setPageTab] = useState('elections');
   const [elections, setElections] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || SEED_ELECTIONS; } catch { return SEED_ELECTIONS; }
   });
@@ -918,17 +916,9 @@ export function ElectionsPage() {
 
   const statusCounts = { upcoming: elections.filter(e=>e.status==='upcoming').length, active: elections.filter(e=>e.status==='active').length, closed: elections.filter(e=>e.status==='closed').length };
 
-  const pageTabs = [{id:'elections',label:'Elections'},{id:'ballots',label:'Ballot Management'}];
-
   return (
     <div className="page-enter">
-      <div className="mb-4">
-        <Tabs tabs={pageTabs} activeTab={pageTab} onChange={setPageTab}/>
-      </div>
-
-      {pageTab === 'ballots' ? <BallotManagementPage /> : (
-        <>
-          {showAdd && (
+      {showAdd && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -1022,14 +1012,12 @@ export function ElectionsPage() {
             </Table>
           </div>
         )}
-          {selected && (
-            <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
-              <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} residents={residents}/>
-            </div>
-          )}
-        </Card>
-        </>
-      )}
+        {selected && (
+          <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
+            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} residents={residents}/>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
