@@ -2,11 +2,11 @@
  * Ballot Management — Davis-Stirling Act compliant
  * California Civil Code §§ 5100–5145 (as amended through Jan 1, 2025)
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Plus, X, Check, Edit2, Trash2, ChevronRight, Search, Shield,
   Lock, Unlock, Clock, FileText, CheckCircle, XCircle, AlertTriangle,
-  Award, Printer, Info, Bell, Download, Users, Calendar, Mail,
+  Award, Printer, Info, Bell, Download, Users, Calendar, Mail, Phone,
   Archive, UserCheck, AlertCircle, Scale,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -87,26 +87,26 @@ const HOA_INFO = {
 };
 
 const SAMPLE_RESIDENTS = [
-  { unit: 'A1', name: 'James Wilson',      address1: '1000 Oakwood Dr, Apt A1', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'A2', name: 'Maria Santos',      address1: '1000 Oakwood Dr, Apt A2', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'A3', name: 'David Kim',         address1: '1000 Oakwood Dr, Apt A3', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'A4', name: 'Lisa Chen',         address1: '1000 Oakwood Dr, Apt A4', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'A5', name: 'Robert Hayes',      address1: '1000 Oakwood Dr, Apt A5', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'B1', name: 'Emily Nguyen',      address1: '1002 Oakwood Dr, Apt B1', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'B2', name: 'Michael Torres',    address1: '1002 Oakwood Dr, Apt B2', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'B3', name: 'Sarah Park',        address1: '1002 Oakwood Dr, Apt B3', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'B4', name: 'Thomas Green',      address1: '1002 Oakwood Dr, Apt B4', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'B5', name: 'Anna Lopez',        address1: '1002 Oakwood Dr, Apt B5', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'C1', name: 'Steven Brown',      address1: '1004 Oakwood Dr, Apt C1', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'C2', name: 'Jennifer Lee',      address1: '1004 Oakwood Dr, Apt C2', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'C3', name: 'Christopher Davis', address1: '1004 Oakwood Dr, Apt C3', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'C4', name: 'Amanda Clark',      address1: '1004 Oakwood Dr, Apt C4', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'C5', name: 'Kevin Martinez',    address1: '1004 Oakwood Dr, Apt C5', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'D1', name: 'Rachel Johnson',    address1: '1006 Oakwood Dr, Apt D1', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'D2', name: 'Brian Anderson',    address1: '1006 Oakwood Dr, Apt D2', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'D3', name: 'Megan White',       address1: '1006 Oakwood Dr, Apt D3', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'D4', name: 'Daniel Thompson',   address1: '1006 Oakwood Dr, Apt D4', city: 'Sacramento', state: 'CA', zip: '95814' },
-  { unit: 'D5', name: 'Jessica Garcia',    address1: '1006 Oakwood Dr, Apt D5', city: 'Sacramento', state: 'CA', zip: '95814' },
+  { unit: 'A1', name: 'James Wilson',      email: 'j.wilson@email.com',    phone: '(916) 555-0101', address1: '1000 Oakwood Dr, Apt A1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'A2', name: 'Maria Santos',      email: 'm.santos@email.com',    phone: '(916) 555-0102', address1: '1000 Oakwood Dr, Apt A2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: false, isOwnerResident: true  },
+  { unit: 'A3', name: 'David Kim',         email: 'd.kim@email.com',       phone: '(916) 555-0103', address1: '1000 Oakwood Dr, Apt A3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'A4', name: 'Lisa Chen',         email: 'l.chen@email.com',      phone: '(916) 555-0104', address1: '1000 Oakwood Dr, Apt A4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: true,  isOwnerResident: true  },
+  { unit: 'A5', name: 'Robert Hayes',      email: 'r.hayes@email.com',     phone: '(916) 555-0105', address1: '1000 Oakwood Dr, Apt A5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'B1', name: 'Emily Nguyen',      email: 'e.nguyen@email.com',    phone: '(916) 555-0106', address1: '1002 Oakwood Dr, Apt B1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: false },
+  { unit: 'B2', name: 'Michael Torres',    email: 'm.torres@email.com',    phone: '(916) 555-0107', address1: '1002 Oakwood Dr, Apt B2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: true,  isOwnerResident: true  },
+  { unit: 'B3', name: 'Sarah Park',        email: 's.park@email.com',      phone: '(916) 555-0108', address1: '1002 Oakwood Dr, Apt B3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'B4', name: 'Thomas Green',      email: 't.green@email.com',     phone: '(916) 555-0109', address1: '1002 Oakwood Dr, Apt B4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'B5', name: 'Anna Lopez',        email: 'a.lopez@email.com',     phone: '(916) 555-0110', address1: '1002 Oakwood Dr, Apt B5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'C1', name: 'Steven Brown',      email: 's.brown@email.com',     phone: '(916) 555-0111', address1: '1004 Oakwood Dr, Apt C1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'C2', name: 'Jennifer Lee',      email: 'j.lee@email.com',       phone: '(916) 555-0112', address1: '1004 Oakwood Dr, Apt C2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'C3', name: 'Christopher Davis', email: 'c.davis@email.com',     phone: '(916) 555-0113', address1: '1004 Oakwood Dr, Apt C3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: false, isOwnerResident: true  },
+  { unit: 'C4', name: 'Amanda Clark',      email: 'a.clark@email.com',     phone: '(916) 555-0114', address1: '1004 Oakwood Dr, Apt C4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'C5', name: 'Kevin Martinez',    email: 'k.martinez@email.com',  phone: '(916) 555-0115', address1: '1004 Oakwood Dr, Apt C5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'D1', name: 'Rachel Johnson',    email: 'r.johnson@email.com',   phone: '(916) 555-0116', address1: '1006 Oakwood Dr, Apt D1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'D2', name: 'Brian Anderson',    email: 'b.anderson@email.com',  phone: '(916) 555-0117', address1: '1006 Oakwood Dr, Apt D2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'D3', name: 'Megan White',       email: 'm.white@email.com',     phone: '(916) 555-0118', address1: '1006 Oakwood Dr, Apt D3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'D4', name: 'Daniel Thompson',   email: 'd.thompson@email.com',  phone: '(916) 555-0119', address1: '1006 Oakwood Dr, Apt D4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: true,  isOwnerResident: true  },
+  { unit: 'D5', name: 'Jessica Garcia',    email: 'j.garcia@email.com',    phone: '(916) 555-0120', address1: '1006 Oakwood Dr, Apt D5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
 ];
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
@@ -137,10 +137,10 @@ const SEED = [
     },
     inspector: null,
     candidates: [
-      { id: 1, name: 'Sarah Chen',    unit: '14B', bio: 'Incumbent secretary, 6 years on board.',        eligible: true,  disqualified: false },
-      { id: 2, name: 'David Park',    unit: '22A', bio: 'Civil engineer, 12 years as resident.',          eligible: true,  disqualified: false },
-      { id: 3, name: 'Yolanda Reyes', unit: '7C',  bio: 'Retired teacher, active in community events.',   eligible: true,  disqualified: false },
-      { id: 4, name: 'Greg Hoffman',  unit: '31D', bio: 'Submitted late — nomination period not yet closed.', eligible: true, disqualified: false },
+      { id: 1, name: 'Sarah Chen',    unit: '14B', email: 's.chen@email.com',   phone: '(916) 555-0201', bio: 'Incumbent secretary, 6 years on board.',        eligible: true, disqualified: false, disqReasons: [], statement: '', nominatedDate: 'Sep 15, 2026' },
+      { id: 2, name: 'David Park',    unit: '22A', email: 'd.park@email.com',   phone: '(916) 555-0202', bio: 'Civil engineer, 12 years as resident.',          eligible: true, disqualified: false, disqReasons: [], statement: '', nominatedDate: 'Sep 20, 2026' },
+      { id: 3, name: 'Yolanda Reyes', unit: '7C',  email: 'y.reyes@email.com',  phone: '(916) 555-0203', bio: 'Retired teacher, active in community events.',   eligible: true, disqualified: false, disqReasons: [], statement: '', nominatedDate: 'Oct 5, 2026'  },
+      { id: 4, name: 'Greg Hoffman',  unit: '31D', email: 'g.hoffman@email.com', phone: '(916) 555-0204', bio: 'Submitted during open nomination period.',        eligible: true, disqualified: false, disqReasons: [], statement: '', nominatedDate: 'Nov 1, 2026'  },
     ],
     ballotInstructions: 'Vote for up to 3 candidates. Return ballot by Mar 2, 2027.',
     ballotReceiptLog: [],
@@ -181,11 +181,11 @@ const SEED = [
     },
     inspector: { name: 'Patricia Winters', firm: 'Winters Election Services', contact: 'p.winters@winterselections.com', assignedDate: 'Dec 15, 2023', conflictChecked: true, declaration: 'Not a director, candidate, related party, or HOA contractor.' },
     candidates: [
-      { id: 1, name: 'Jane Ramirez',  unit: '1A', bio: 'Incumbent president.', eligible: true, disqualified: false, votes: 98, elected: true },
-      { id: 2, name: 'Tom Nakamura',  unit: '2B', bio: 'VP, maintenance focus.', eligible: true, disqualified: false, votes: 87, elected: true },
-      { id: 3, name: 'Maria Garcia',  unit: '3C', bio: 'CPA, 15 years HOA experience.', eligible: true, disqualified: false, votes: 91, elected: true },
-      { id: 4, name: 'Robert Nguyen', unit: '4D', bio: 'First-time candidate.', eligible: true, disqualified: false, votes: 44, elected: false },
-      { id: 5, name: 'Linda Park',    unit: '5E', bio: 'Community events focus.', eligible: true, disqualified: false, votes: 38, elected: false },
+      { id: 1, name: 'Jane Ramirez',  unit: '1A', email: 'j.ramirez@email.com',  phone: '(916) 555-0101', bio: 'Incumbent president.', eligible: true, disqualified: false, disqReasons: [], votes: 98, elected: true,  statement: '<p>Dear Fellow Homeowners,</p><p>It has been my honor to serve as your Board President. Over the past four years we have repaved the parking structure, settled the insurance dispute, and reduced delinquencies by 30%. I ask for your continued trust to finish the solar project and reserve fund study.</p><p>Respectfully, Jane Ramirez</p>', nominatedDate: 'Sep 5, 2023' },
+      { id: 2, name: 'Tom Nakamura',  unit: '2B', email: 't.nakamura@email.com', phone: '(916) 555-0102', bio: 'VP, maintenance focus.', eligible: true, disqualified: false, disqReasons: [], votes: 87, elected: true,  statement: '<p>Dear Neighbors,</p><p>As your VP I have overseen $180,000 in maintenance savings through competitive vendor bidding. My priorities for the next term are the pool renovation, elevator modernization, and completing the landscaping master plan.</p><p>— Tom Nakamura, Unit 2B</p>', nominatedDate: 'Sep 6, 2023' },
+      { id: 3, name: 'Maria Garcia',  unit: '3C', email: 'm.garcia@email.com',   phone: '(916) 555-0103', bio: 'CPA, 15 years HOA experience.', eligible: true, disqualified: false, disqReasons: [], votes: 91, elected: true,  statement: '<p>I am a licensed CPA with 15 years of HOA financial management experience. I will bring transparency to our reserve fund, conduct a third-party audit, and ensure we are fully funded per the reserve study. Sound finances protect every owner\'s investment.</p>', nominatedDate: 'Sep 10, 2023' },
+      { id: 4, name: 'Robert Nguyen', unit: '4D', email: 'r.nguyen@email.com',   phone: '(916) 555-0104', bio: 'First-time candidate.', eligible: true, disqualified: false, disqReasons: [], votes: 44, elected: false, statement: '<p>I am a first-time candidate running on a platform of communication and transparency. I will hold monthly town halls, publish a newsletter, and ensure every homeowner\'s voice is heard before major decisions are made.</p>', nominatedDate: 'Sep 18, 2023' },
+      { id: 5, name: 'Linda Park',    unit: '5E', email: 'l.park@email.com',     phone: '(916) 555-0105', bio: 'Community events focus.', eligible: true, disqualified: false, disqReasons: [], votes: 38, elected: false, statement: '<p>Our community deserves more than management — it deserves a sense of belonging. I will organize quarterly community events, expand the community garden, and create a mentorship program for new residents.</p>', nominatedDate: 'Sep 22, 2023' },
     ],
     ballotInstructions: 'Vote for up to 3 candidates. Return by Feb 1, 2024.',
     ballotReceiptLog: Array.from({ length: 112 }, (_, i) => ({ unit: `Unit ${i + 1}`, received: 'Feb 1, 2024' })),
@@ -515,112 +515,361 @@ function TimelineTab({ election }) {
   );
 }
 
+// ─── Disqualification criteria (AB 1764) ─────────────────────────────────────
+const DISQ_CRITERIA = [
+  { id: 'delinquent',   label: 'Delinquent in assessments',                             auto: true,  autoField: 'isDelinquent'    },
+  { id: 'felony',       label: 'Convicted of a felony involving dishonesty',             auto: false, autoField: null              },
+  { id: 'violation',    label: 'Violated HOA rules within the past year',               auto: true,  autoField: 'hasViolation'    },
+  { id: 'non_resident', label: 'Does not own or reside in the community (per bylaws)',   auto: true,  autoField: 'isNotResident'   },
+  { id: 'late_nom',     label: 'Nominated after the close of nominations',              auto: false, autoField: null              },
+];
+const mkDisqChecks = () => Object.fromEntries(DISQ_CRITERIA.map(c => [c.id, false]));
+
+function ResidentCombobox({ selected, onSelect, residents }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen]   = useState(false);
+  const filtered = residents.filter(r =>
+    !query.trim() ||
+    r.name.toLowerCase().includes(query.toLowerCase()) ||
+    r.unit.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, 25);
+  return (
+    <div className="relative">
+      <input
+        value={selected ? `${selected.name} — Unit ${selected.unit}` : query}
+        onChange={e => { setQuery(e.target.value); onSelect(null); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 180)}
+        placeholder="Search by name or unit number…"
+        className={iCls} autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto">
+          {filtered.map(r => (
+            <button key={`${r.unit}-${r.name}`} type="button"
+              onMouseDown={() => { onSelect(r); setQuery(''); setOpen(false); }}
+              className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-slate-800">{r.name}</span>
+                <span className="text-[11px] text-slate-400 ml-2">Unit {r.unit}</span>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {r.isDelinquent     && <span className="text-[9px] bg-rose-100  text-rose-700  px-1.5 py-0.5 rounded-full font-medium">Delinquent</span>}
+                {r.hasViolation     && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">Violation</span>}
+                {!r.isOwnerResident && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-medium">Non-resident</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EligibilityPanel({ candidateUnit, currentReasons, role, onSave, onClose }) {
+  const resident  = SAMPLE_RESIDENTS.find(r => r.unit === candidateUnit);
+  const showLabel = ['manager', 'inspector'].includes(role);
+  const [checks, setChecks] = useState(
+    Object.fromEntries(DISQ_CRITERIA.map(c => [c.id, (currentReasons || []).includes(c.id)]))
+  );
+  const allChecked = DISQ_CRITERIA.every(c => checks[c.id]);
+  return (
+    <div className="px-4 pb-4 pt-3 bg-white border-t border-slate-100 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-slate-700">
+          {showLabel ? 'AB 1764 — Disqualification Criteria' : 'Eligibility Checklist'}
+        </p>
+        <button type="button"
+          onClick={() => setChecks(Object.fromEntries(DISQ_CRITERIA.map(c => [c.id, !allChecked])))}
+          className="text-[10px] text-slate-500 hover:text-slate-700 font-medium">
+          {allChecked ? 'Uncheck all' : 'Check all'}
+        </button>
+      </div>
+      <div className="space-y-1.5">
+        {DISQ_CRITERIA.map(c => (
+          <label key={c.id} className={clsx('flex items-start gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition-colors', checks[c.id] ? 'bg-rose-50' : 'hover:bg-slate-50')}>
+            <input type="checkbox" checked={!!checks[c.id]}
+              onChange={e => setChecks(p => ({ ...p, [c.id]: e.target.checked }))}
+              disabled={c.auto && !!resident}
+              className="mt-0.5 flex-shrink-0"/>
+            <span className={clsx('text-xs', checks[c.id] ? 'text-rose-700 font-medium' : 'text-slate-600')}>
+              {c.label}
+              {c.auto && <span className="text-[10px] text-slate-400 ml-1">(from resident record)</span>}
+            </span>
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Button variant="primary" size="sm" onClick={() => onSave(DISQ_CRITERIA.filter(c => checks[c.id]).map(c => c.id))}><Check size={11}/>Save</Button>
+        <Button variant="ghost"   size="sm" onClick={onClose}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
 function NominationsTab({ election, role, onUpdate, addAudit }) {
-  const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState({ name: '', unit: '', bio: '', eligible: true });
-  const eligible = election.candidates.filter(c => c.eligible && !c.disqualified);
+  const [showForm,      setShowForm]      = useState(false);
+  const [resident,      setResident]      = useState(null);
+  const [disqChecks,    setDisqChecks]    = useState(mkDisqChecks());
+  const [overrideReason,setOverrideReason]= useState('');
+  const [showOverride,  setShowOverride]  = useState(false);
+  const [expandedId,    setExpandedId]    = useState(null);
 
-  const addCandidate = () => {
-    if (!draft.name.trim()) return;
-    const c = { ...draft, id: Date.now(), disqualified: !draft.eligible, votes: 0, elected: false };
-    onUpdate({ candidates: [...election.candidates, c] });
-    addAudit('Candidate Added', `${draft.name} (Unit ${draft.unit}) nominated. Eligibility: ${draft.eligible ? 'verified' : 'pending'}.`, 'blue');
-    setDraft({ name: '', unit: '', bio: '', eligible: true });
-    setShowForm(false);
+  const today      = new Date();
+  const nomOpen    = election.dates.nominationsOpen  ? new Date(election.dates.nominationsOpen)  : null;
+  const nomClose   = election.dates.nominationsClose ? new Date(election.dates.nominationsClose) : null;
+  const notYetOpen = nomOpen  && today < nomOpen;
+  const pastClose  = nomClose && today > nomClose;
+  const inWindow   = !notYetOpen && !pastClose;
+  const canAdd     = can(role, 'manageNominations');
+  const showLabel  = ['manager', 'inspector'].includes(role);
+
+  const handleResidentSelect = r => {
+    setResident(r);
+    if (r) setDisqChecks(p => ({
+      ...p,
+      delinquent:   r.isDelinquent     || false,
+      violation:    r.hasViolation     || false,
+      non_resident: !r.isOwnerResident ? true : false,
+    }));
   };
 
-  const disqualify = id => {
-    const c = election.candidates.find(x => x.id === id);
-    onUpdate({ candidates: election.candidates.map(x => x.id === id ? { ...x, disqualified: !x.disqualified } : x) });
-    addAudit('Eligibility Updated', `${c?.name} marked ${c?.disqualified ? 'eligible' : 'disqualified (AB 1764)'}.`, 'amber');
+  const anyDisq    = DISQ_CRITERIA.some(c => disqChecks[c.id]);
+  const allChecked = DISQ_CRITERIA.every(c => disqChecks[c.id]);
+  const toggleAll  = () => setDisqChecks(Object.fromEntries(DISQ_CRITERIA.map(c => [c.id, !allChecked])));
+
+  const resetForm = () => {
+    setShowForm(false); setResident(null); setShowOverride(false);
+    setOverrideReason(''); setDisqChecks(mkDisqChecks());
   };
 
+  const submitCandidate = () => {
+    if (!resident) return;
+    if (!inWindow && !overrideReason.trim()) return;
+    const disqReasons = DISQ_CRITERIA.filter(c => disqChecks[c.id]).map(c => c.id);
+    onUpdate({ candidates: [...election.candidates, {
+      id: Date.now(), name: resident.name, unit: resident.unit,
+      email: resident.email || '', phone: resident.phone || '',
+      bio: '', eligible: disqReasons.length === 0, disqualified: disqReasons.length > 0,
+      disqReasons, votes: 0, elected: false, statement: '', nominatedDate: nowStr(),
+      overrideReason: !inWindow ? overrideReason : null,
+    }]});
+    addAudit('Candidate Nominated',
+      `${resident.name} (Unit ${resident.unit}) nominated.${disqReasons.length ? ` Flags: ${disqReasons.join(', ')}.` : ' Eligible.'}${!inWindow ? ` Override: ${overrideReason}` : ''}`,
+      disqReasons.length ? 'amber' : 'blue'
+    );
+    resetForm();
+  };
+
+  const updateDisq = (id, newReasons) => {
+    const cand = election.candidates.find(c => c.id === id);
+    onUpdate({ candidates: election.candidates.map(c =>
+      c.id === id ? { ...c, disqReasons: newReasons, disqualified: newReasons.length > 0, eligible: newReasons.length === 0 } : c
+    )});
+    addAudit('Eligibility Updated', `${cand?.name}: ${newReasons.length ? `Flags: ${newReasons.join(', ')}` : 'All flags cleared — eligible'}.`, newReasons.length ? 'amber' : 'blue');
+    setExpandedId(null);
+  };
+
+  const eligible   = election.candidates.filter(c => !c.disqualified);
   const canAcclaim = eligible.length <= election.seatsAvailable && eligible.length > 0;
 
   return (
     <div>
+      {/* Nomination period header */}
+      <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 mb-4">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Nomination Period</p>
+        <div className="grid grid-cols-2 gap-3 mb-2">
+          <div><p className="text-[10px] text-slate-400">Opens</p><p className="text-xs font-bold text-slate-800">{election.dates.nominationsOpen || '—'}</p></div>
+          <div><p className="text-[10px] text-slate-400">Closes</p><p className="text-xs font-bold text-slate-800">{election.dates.nominationsClose || '—'}</p></div>
+        </div>
+        {notYetOpen && <p className="text-[11px] text-amber-700 font-medium">Nominations open on {election.dates.nominationsOpen}</p>}
+        {pastClose  && <p className="text-[11px] text-rose-700  font-medium">Nominations closed on {election.dates.nominationsClose}</p>}
+        {inWindow   && <p className="text-[11px] text-emerald-700 font-medium">Nominations are currently open</p>}
+        <p className="text-[10px] text-slate-400 mt-1.5">Civil Code § 5115 requires a minimum 90-day nomination period. No statutory maximum on number of candidates.</p>
+      </div>
+
       {canAcclaim && (
-        <div className="mt-1 mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+        <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2">
+          <Award size={13} className="text-emerald-600"/>
+          <p className="text-xs font-bold text-emerald-800">Acclamation may be available — {eligible.length} eligible candidate(s), {election.seatsAvailable} seat(s)</p>
+        </div>
+      )}
+
+      {/* Header + add button */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Candidates ({election.candidates.length})</p>
+        {canAdd && (
           <div className="flex items-center gap-2">
-            <Award size={13} className="text-emerald-600"/>
-            <p className="text-xs font-bold text-emerald-800">Acclamation conditions may be met — {eligible.length} candidate(s), {election.seatsAvailable} seat(s)</p>
+            {!inWindow && !showForm && (
+              <button onClick={() => { setShowOverride(true); setShowForm(true); }}
+                className="text-[10px] text-amber-600 hover:text-amber-800 font-medium flex items-center gap-1">
+                <Unlock size={10}/>Add with Override
+              </button>
+            )}
+            {inWindow && !showForm && (
+              <button onClick={() => setShowForm(true)}
+                className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1">
+                <Plus size={11}/>Add Candidate
+              </button>
+            )}
+            {showForm && (
+              <button onClick={resetForm} className="text-xs text-slate-500 hover:text-slate-700 font-medium">Cancel</button>
+            )}
           </div>
-        </div>
-      )}
-      <div className="flex items-center justify-between mt-1">
-        <SL>Candidates ({election.candidates.length})</SL>
-        <PermGate role={role} action="manageNominations">
-          <button onClick={() => setShowForm(v => !v)}
-            className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 mb-[-4px]">
-            <Plus size={11}/>Add Candidate
-          </button>
-        </PermGate>
+        )}
       </div>
 
+      {/* Add form */}
       {showForm && (
-        <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div><label className={fLabel}>Full Name *</label><input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} className={iCls} placeholder="Jane Smith"/></div>
-            <div><label className={fLabel}>Unit #</label><input value={draft.unit} onChange={e => setDraft(d => ({ ...d, unit: e.target.value }))} className={iCls} placeholder="12A"/></div>
+        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 mb-4 space-y-3">
+          {showOverride && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl">
+              <p className="text-xs font-bold text-amber-900 mb-1 flex items-center gap-1.5"><Unlock size={11}/>Override — {notYetOpen ? 'Before Nomination Period' : 'After Nominations Closed'}</p>
+              <p className="text-[11px] text-amber-700 mb-2">Requires board approval or documented extenuating circumstances. Reason is recorded in the audit log.</p>
+              <textarea value={overrideReason} onChange={e => setOverrideReason(e.target.value)} rows={2}
+                placeholder="State the reason for adding a candidate outside the nomination window…"
+                className={iCls + ' resize-none text-xs'}/>
+            </div>
+          )}
+
+          <div>
+            <label className={fLabel}>Resident Name *</label>
+            <ResidentCombobox selected={resident} onSelect={handleResidentSelect} residents={SAMPLE_RESIDENTS}/>
           </div>
-          <div><label className={fLabel}>Candidate Statement</label><textarea value={draft.bio} onChange={e => setDraft(d => ({ ...d, bio: e.target.value }))} rows={2} className={iCls} placeholder="Brief statement for ballot package..."/></div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={draft.eligible} onChange={e => setDraft(d => ({ ...d, eligible: e.target.checked }))} className="rounded"/>
-            <span className="text-xs text-slate-600">Eligibility verified (per AB 1764 and HOA bylaws)</span>
-          </label>
+
+          {resident && (
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className={fLabel}>Unit (auto)</label>
+                <input value={resident.unit} readOnly className={iCls + ' bg-slate-100 cursor-not-allowed'}/>
+              </div>
+              <div>
+                <label className={fLabel}>Email (auto)</label>
+                {resident.email
+                  ? <a href={`mailto:${resident.email}?subject=${encodeURIComponent(election.title + ' — Nominations')}`}
+                       className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-1 truncate">
+                      <Mail size={10} className="flex-shrink-0"/>{resident.email}
+                    </a>
+                  : <p className="text-xs text-slate-400 mt-1 italic">No email on file</p>}
+              </div>
+              <div>
+                <label className={fLabel}>Phone (auto)</label>
+                {resident.phone
+                  ? <a href={`tel:${resident.phone.replace(/\D/g,'')}`}
+                       className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-1">
+                      <Phone size={10} className="flex-shrink-0"/>{resident.phone}
+                    </a>
+                  : <p className="text-xs text-slate-400 mt-1 italic">No phone on file</p>}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={fLabel + ' mb-0'}>{showLabel ? 'Disqualification Criteria (AB 1764)' : 'Eligibility Checklist'}</label>
+              <button type="button" onClick={toggleAll} className="text-[10px] text-slate-500 hover:text-slate-700 font-medium">
+                {allChecked ? 'Uncheck all' : 'Check all'}
+              </button>
+            </div>
+            <div className="space-y-1.5 p-2.5 bg-white rounded-xl border border-slate-200">
+              {DISQ_CRITERIA.map(c => (
+                <label key={c.id} className={clsx('flex items-start gap-2 cursor-pointer rounded-lg px-1.5 py-1 transition-colors', disqChecks[c.id] ? 'bg-rose-50' : 'hover:bg-slate-50')}>
+                  <input type="checkbox" checked={!!disqChecks[c.id]}
+                    onChange={e => setDisqChecks(p => ({ ...p, [c.id]: e.target.checked }))}
+                    disabled={c.auto && !!resident}
+                    className="mt-0.5 flex-shrink-0"/>
+                  <div>
+                    <span className={clsx('text-xs', disqChecks[c.id] ? 'text-rose-700 font-medium' : 'text-slate-600')}>{c.label}</span>
+                    {c.auto && <span className="text-[10px] text-slate-400 ml-1.5">(auto from resident record)</span>}
+                  </div>
+                </label>
+              ))}
+            </div>
+            {anyDisq && <p className="text-xs text-rose-600 mt-1.5 flex items-center gap-1"><AlertTriangle size={11}/>Candidate will be marked disqualified</p>}
+          </div>
+
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={addCandidate}><Check size={11}/>Add</Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={submitCandidate}
+              disabled={!resident || (showOverride && !overrideReason.trim())}>
+              <Check size={11}/>Add Candidate
+            </Button>
           </div>
         </div>
       )}
 
-      <div className="mb-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
-        <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1">AB 1764 — Disqualification Criteria</p>
-        <div className="text-[11px] text-blue-700 space-y-0.5">
-          {['Delinquent in assessments', 'Convicted of a felony involving dishonesty', 'Violated HOA rules (within 1 year)', 'Does not own or reside in the community (per bylaws)', 'Nominated after close of nominations'].map(r => (
-            <div key={r} className="flex items-center gap-1"><XCircle size={9}/>{r}</div>
-          ))}
-        </div>
-      </div>
-
+      {/* Candidate list */}
       {election.candidates.length === 0 ? (
-        <p className="text-sm text-slate-400 italic text-center py-6">No candidates submitted yet</p>
+        <p className="text-sm text-slate-400 italic text-center py-6">No candidates nominated yet</p>
       ) : (
         <div className="space-y-2">
           {election.candidates.map((c, i) => (
-            <div key={c.id} className={clsx('p-3 border rounded-xl', c.disqualified ? 'border-rose-200 bg-rose-50' : c.elected ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100')}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div className="w-5 h-5 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">{i + 1}</div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                      <span className="text-sm font-semibold text-slate-800">{c.name}</span>
-                      {c.unit && <span className="text-[11px] text-slate-400">Unit {c.unit}</span>}
-                      {c.elected    && <Badge variant="green"><Award size={9}/>Elected</Badge>}
-                      {c.disqualified && <Badge variant="red"><XCircle size={9}/>Disqualified</Badge>}
-                      {!c.disqualified && !c.elected && <Badge variant="blue">Eligible</Badge>}
+            <div key={c.id} className={clsx('border rounded-xl overflow-hidden', c.disqualified ? 'border-rose-200' : c.elected ? 'border-emerald-200' : 'border-slate-100')}>
+              <div className={clsx('p-3', c.disqualified ? 'bg-rose-50' : c.elected ? 'bg-emerald-50' : '')}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                    <div className="w-5 h-5 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">{i + 1}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                        <span className="text-sm font-semibold text-slate-800">{c.name}</span>
+                        {c.unit && <span className="text-[11px] text-slate-400">Unit {c.unit}</span>}
+                        {c.elected      && <Badge variant="green"><Award size={9}/>Elected</Badge>}
+                        {c.disqualified && <Badge variant="red"><XCircle size={9}/>Disqualified</Badge>}
+                        {!c.disqualified && !c.elected && <Badge variant="blue">Eligible</Badge>}
+                      </div>
+                      {c.bio && <p className="text-xs text-slate-500 italic mb-0.5">{c.bio}</p>}
+                      <div className="flex items-center gap-3 flex-wrap mt-0.5">
+                        {c.email && (
+                          <a href={`mailto:${c.email}?subject=${encodeURIComponent(election.title + ' — Nominations')}`}
+                             className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800">
+                            <Mail size={9}/>{c.email}
+                          </a>
+                        )}
+                        {c.phone && (
+                          <a href={`tel:${c.phone.replace(/\D/g,'')}`}
+                             className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800">
+                            <Phone size={9}/>{c.phone}
+                          </a>
+                        )}
+                        {c.nominatedDate && <span className="text-[10px] text-slate-400">Nominated {c.nominatedDate}</span>}
+                        {c.overrideReason && <span className="text-[10px] text-amber-600 italic">Override: {c.overrideReason}</span>}
+                      </div>
+                      {(c.disqReasons||[]).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {(c.disqReasons||[]).map(rid => {
+                            const cr = DISQ_CRITERIA.find(d => d.id === rid);
+                            return cr ? <span key={rid} className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full font-medium">{cr.label}</span> : null;
+                          })}
+                        </div>
+                      )}
+                      {election.stage === 'archived' && c.votes !== undefined && (
+                        <p className="text-xs font-bold text-slate-700 mt-1">{c.votes} votes</p>
+                      )}
                     </div>
-                    {c.bio && <p className="text-xs text-slate-500 italic">{c.bio}</p>}
-                    {election.stage === 'archived' && c.votes !== undefined && (
-                      <p className="text-xs font-bold text-slate-700 mt-1">{c.votes} votes</p>
-                    )}
                   </div>
+                  {can(role, 'manageNominations') && election.stage !== 'archived' && (
+                    <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
+                      className="text-[10px] text-slate-400 hover:text-slate-600 px-2 py-1 rounded flex-shrink-0 flex items-center gap-1 hover:bg-slate-100 transition-colors">
+                      <Edit2 size={9}/>{expandedId === c.id ? 'Close' : 'Eligibility'}
+                    </button>
+                  )}
                 </div>
-                {can(role, 'manageNominations') && election.stage !== 'archived' && (
-                  <button onClick={() => disqualify(c.id)}
-                    className={clsx('text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors flex-shrink-0', c.disqualified ? 'text-emerald-600 hover:bg-emerald-100' : 'text-rose-600 hover:bg-rose-100')}>
-                    {c.disqualified ? 'Reinstate' : 'Disqualify'}
-                  </button>
-                )}
               </div>
+              {expandedId === c.id && can(role, 'manageNominations') && (
+                <EligibilityPanel
+                  candidateUnit={c.unit}
+                  currentReasons={c.disqReasons || []}
+                  role={role}
+                  onSave={newReasons => updateDisq(c.id, newReasons)}
+                  onClose={() => setExpandedId(null)}
+                />
+              )}
             </div>
           ))}
         </div>
       )}
 
       <p className="text-[11px] text-slate-400 mt-3">
-        {election.type === 'board_director' ? `Floor nominations prohibited when electronic ballots are in use (Civil Code § 5105).` : ''}
+        {election.type === 'board_director' ? 'Floor nominations prohibited when electronic ballots are in use (Civil Code § 5105). No statutory maximum on number of candidates.' : ''}
       </p>
     </div>
   );
@@ -1115,6 +1364,178 @@ function ComplianceTab({ election, role, onUpdate, addAudit }) {
   );
 }
 
+// ─── Statements Tab ───────────────────────────────────────────────────────────
+function StatementsTab({ election, role, onUpdate, addAudit }) {
+  const editorRefs = useRef({});
+  const [saved, setSaved]     = useState({});
+  const canEdit   = can(role, 'manageNominations') || role === 'inspector';
+  const eligible  = election.candidates.filter(c => !c.disqualified);
+  const hasStmts  = eligible.some(c => c.statement?.trim());
+
+  useEffect(() => {
+    eligible.forEach(c => {
+      const el = editorRefs.current[c.id];
+      if (el && c.statement && !el.innerHTML) el.innerHTML = c.statement;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveStatement = cand => {
+    const html = editorRefs.current[cand.id]?.innerHTML || '';
+    onUpdate({ candidates: election.candidates.map(c => c.id === cand.id ? { ...c, statement: html } : c) });
+    const words = html.replace(/<[^>]+>/g, '').split(/\s+/).filter(Boolean).length;
+    addAudit('Candidate Statement Saved', `Statement for ${cand.name} saved (${words} words).`, 'blue');
+    setSaved(p => ({ ...p, [cand.id]: true }));
+    setTimeout(() => setSaved(p => ({ ...p, [cand.id]: false })), 2000);
+  };
+
+  const fmt = cmd => document.execCommand(cmd, false, null);
+
+  const handlePrint = () => {
+    const stmts = eligible.filter(c => c.statement?.trim() || editorRefs.current[c.id]?.innerHTML?.trim());
+    if (!stmts.length) return;
+    const css = `
+      @page { size: 8.5in 11in; margin: 0.85in 0.75in; }
+      * { box-sizing: border-box; }
+      body { font-family: 'Georgia', serif; color: #111; margin: 0; font-size: 10.5pt; line-height: 1.6; }
+      .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 18px; }
+      .hoa-name { font-size: 14pt; font-weight: bold; color: #1e3a5f; }
+      .doc-title { font-size: 12pt; font-weight: bold; margin-top: 4px; }
+      .doc-sub { font-size: 9pt; color: #666; margin-top: 2px; }
+      .disclaimer { background: #fffbeb; border: 1px solid #d97706; padding: 8px 14px; border-radius: 4px; font-size: 8.5pt; color: #78350f; margin-bottom: 20px; font-style: italic; }
+      .candidate { page-break-inside: avoid; margin-bottom: 26px; }
+      .cand-hdr { background: #1e3a5f; color: white; padding: 8px 14px; border-radius: 4px 4px 0 0; display: flex; align-items: center; gap: 12px; }
+      .cand-num  { font-size: 13pt; font-weight: bold; opacity: 0.45; }
+      .cand-name { font-size: 12pt; font-weight: bold; }
+      .cand-meta { font-size: 8.5pt; opacity: 0.75; margin-top: 1px; }
+      .cand-body { border: 1px solid #d1d5db; border-top: none; padding: 14px 16px; border-radius: 0 0 4px 4px; min-height: 60px; }
+      .cand-body p, .cand-body div { margin: 0 0 8px 0; }
+      .cand-body ul, .cand-body ol  { padding-left: 20px; margin: 4px 0 8px; }
+      .footer { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 8pt; color: #666; display: flex; justify-content: space-between; }
+      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    `;
+    const body = stmts.map((c, i) => {
+      const content = editorRefs.current[c.id]?.innerHTML || c.statement || '';
+      return `<div class="candidate">
+        <div class="cand-hdr">
+          <div class="cand-num">${i + 1}</div>
+          <div><div class="cand-name">${c.name}</div><div class="cand-meta">Unit ${c.unit}${c.bio ? ' · ' + c.bio : ''}</div></div>
+        </div>
+        <div class="cand-body">${content || '<p style="color:#999;font-style:italic;">No statement submitted.</p>'}</div>
+      </div>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Candidate Statements — ${election.title}</title><style>${css}</style></head>
+<body>
+  <div class="header">
+    <div class="hoa-name">${HOA_INFO.name}</div>
+    <div class="doc-title">CANDIDATE STATEMENTS</div>
+    <div class="doc-sub">${election.title}${election.dates.votingDeadline ? ' · Voting Deadline: ' + election.dates.votingDeadline : ''}</div>
+  </div>
+  <div class="disclaimer">NOTICE: Statements below were submitted by the candidates and are reproduced verbatim without editing or endorsement by the Association. The HOA takes no position on any candidate. Provided pursuant to the Davis-Stirling Common Interest Development Act (Civil Code § 5115).</div>
+  ${body}
+  <div class="footer">
+    <span>${HOA_INFO.name} · ${HOA_INFO.address1}, ${HOA_INFO.city}, ${HOA_INFO.state} ${HOA_INFO.zip}</span>
+    <span>Voting Deadline: ${election.dates.votingDeadline || 'See ballot'}</span>
+  </div>
+</body></html>`;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    w.document.write(html); w.document.close();
+    setTimeout(() => w.print(), 600);
+  };
+
+  return (
+    <div>
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <SL>Candidate Statements</SL>
+          <p className="text-xs text-slate-500 max-w-sm">Paste each candidate's message from their email. Use the toolbar for rich formatting. Prints as a ballot insert.</p>
+        </div>
+        <Button variant={hasStmts ? 'primary' : 'secondary'} size="sm" onClick={handlePrint} disabled={!hasStmts}>
+          <Printer size={12}/>Print Ballot Insert
+        </Button>
+      </div>
+
+      {eligible.length === 0 ? (
+        <p className="text-sm text-slate-400 italic text-center py-8">No eligible candidates — add them in the Nominations tab.</p>
+      ) : (
+        <div className="space-y-4">
+          {eligible.map((c, i) => (
+            <div key={c.id} className="border border-slate-200 rounded-xl overflow-hidden">
+              {/* Candidate header row */}
+              <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-100">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">{i + 1}</div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-[11px] text-slate-400">Unit {c.unit}</span>
+                      {c.email && (
+                        <a href={`mailto:${c.email}?subject=${encodeURIComponent(election.title + ' — Candidate Statement')}`}
+                           className="flex items-center gap-0.5 text-[11px] text-blue-600 hover:text-blue-800">
+                          <Mail size={9}/>{c.email}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {c.elected && <Badge variant="green"><Award size={9}/>Elected</Badge>}
+                  {c.statement?.trim() ? <Badge variant="blue">Has Statement</Badge> : <Badge variant="gray">No Statement</Badge>}
+                  {canEdit && (
+                    <Button variant={saved[c.id] ? 'success' : 'secondary'} size="sm" onClick={() => saveStatement(c)}>
+                      {saved[c.id] ? <><Check size={11}/>Saved!</> : <><Check size={11}/>Save</>}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {canEdit ? (
+                <>
+                  {/* Formatting toolbar */}
+                  <div className="flex items-center gap-1 px-3 py-1.5 bg-white border-b border-slate-100 flex-wrap">
+                    {[['bold','B','font-bold'],['italic','I','italic'],['underline','U','underline']].map(([cmd, lbl, cls]) => (
+                      <button key={cmd} type="button"
+                        onMouseDown={e => { e.preventDefault(); fmt(cmd); }}
+                        className={`w-6 h-6 text-xs rounded hover:bg-slate-100 ${cls} text-slate-700`}>{lbl}</button>
+                    ))}
+                    <div className="w-px h-4 bg-slate-200 mx-1"/>
+                    <button type="button" onMouseDown={e => { e.preventDefault(); fmt('insertUnorderedList'); }}
+                      className="px-2 h-6 text-[11px] rounded hover:bg-slate-100 text-slate-700">• List</button>
+                    <button type="button" onMouseDown={e => { e.preventDefault(); fmt('insertOrderedList'); }}
+                      className="px-2 h-6 text-[11px] rounded hover:bg-slate-100 text-slate-700">1. List</button>
+                    <div className="w-px h-4 bg-slate-200 mx-1"/>
+                    <button type="button"
+                      onMouseDown={e => { e.preventDefault(); if (editorRefs.current[c.id]) editorRefs.current[c.id].innerHTML = ''; }}
+                      className="px-2 h-6 text-[11px] rounded hover:bg-rose-50 text-rose-500">Clear</button>
+                    <span className="ml-auto text-[10px] text-slate-400 hidden sm:block">Paste candidate email here</span>
+                  </div>
+                  {/* Rich text editor */}
+                  <div
+                    ref={el => { editorRefs.current[c.id] = el; if (el && c.statement && !el.innerHTML) el.innerHTML = c.statement; }}
+                    contentEditable suppressContentEditableWarning
+                    className="min-h-[140px] px-4 py-3 text-sm text-slate-800 leading-relaxed focus:outline-none focus:ring-inset focus:ring-2 focus:ring-navy-300"
+                  />
+                </>
+              ) : (
+                <div className="px-4 py-3 min-h-[60px]">
+                  {c.statement?.trim()
+                    ? <div className="text-sm text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: c.statement }}/>
+                    : <p className="text-sm text-slate-400 italic">No statement submitted yet.</p>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+        <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">HOA Neutrality — Required</p>
+        <p className="text-[11px] text-amber-700">Statements are reproduced verbatim without editing or endorsement. A required neutrality disclaimer is printed on the ballot insert (Civil Code § 5115).</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Envelopes Tab ────────────────────────────────────────────────────────────
 function EnvelopesTab({ election, role }) {
   const ENV_TYPES = {
@@ -1435,6 +1856,7 @@ function ElectionDetail({ election, role, onUpdate, onClose }) {
     { id: 'notices',     label: 'Notices',     roles: ['manager'] },
     { id: 'compliance',  label: 'Compliance',  roles: ['manager','inspector','resident'] },
     { id: 'audit',       label: 'Audit Log',   roles: ['manager','inspector'] },
+    { id: 'statements',  label: 'Statements',  roles: ['manager','inspector','board','resident'] },
     { id: 'envelopes',   label: 'Envelopes',   roles: ['manager','inspector','board'] },
   ].filter(t => t.roles.includes(role));
 
@@ -1473,6 +1895,7 @@ function ElectionDetail({ election, role, onUpdate, onClose }) {
         {tab === 'counting'    && <CountingTab    election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'notices'     && <NoticesTab     election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'compliance'  && <ComplianceTab  election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
+        {tab === 'statements' && <StatementsTab election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'envelopes' && <EnvelopesTab election={election} role={role}/>}
         {tab === 'audit' && (
           <div>
