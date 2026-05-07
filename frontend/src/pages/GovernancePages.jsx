@@ -855,6 +855,19 @@ export function ElectionsPage({ onNavigate }) {
   const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
   const [residents, setResidents] = useState([]);
 
+  // On mount: sync all gov elections into BMP's localStorage so both pages stay in sync
+  useEffect(() => {
+    const govElections = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || []; } catch { return []; } })();
+    if (govElections.length > 0) {
+      try {
+        const bmp = JSON.parse(localStorage.getItem(BMP_LS_KEY) || '[]');
+        const bmpIds = new Set(bmp.map(e => e.id));
+        const toAdd = govElections.filter(e => !bmpIds.has(e.id)).map(e => toBmpShape(e, e.id));
+        if (toAdd.length > 0) localStorage.setItem(BMP_LS_KEY, JSON.stringify([...toAdd, ...bmp]));
+      } catch {}
+    }
+  }, []);
+
   useEffect(() => {
     residentAPI.list(COMMUNITY_ID).then(res => setResidents(res.data || [])).catch(() => {});
   }, []);
