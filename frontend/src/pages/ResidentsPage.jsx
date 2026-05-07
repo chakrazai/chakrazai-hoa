@@ -563,12 +563,20 @@ function OverviewTab({ r, onUpdate }) {
           </div>
         </div>
       </div>
-      <div className="flex items-start gap-3 py-2.5">
+      <div className="flex items-start gap-3 py-2.5 border-b border-slate-50">
         <div className="w-7 h-7 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
           <Home size={13} className="text-slate-400" />
         </div>
         <div><p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Move-in Date</p><p className="text-sm text-slate-800 mt-0.5">{r.moveInDate}</p></div>
       </div>
+      {r.moveOutDate && (
+        <div className="flex items-start gap-3 py-2.5">
+          <div className="w-7 h-7 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+            <LogOut size={13} className="text-slate-400" />
+          </div>
+          <div><p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Move-out Date</p><p className="text-sm text-slate-800 mt-0.5">{r.moveOutDate}</p></div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1151,6 +1159,88 @@ function FloorMapTab({ r }) {
   );
 }
 
+// ─── Tab: Tenants ─────────────────────────────────────────────────────────────
+
+function TenantsTab({ r, onUpdate }) {
+  const EMPTY_TENANT = { name: '', address: '', phone: '', email: '', moveInDate: '', moveOutDate: '', notes: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState(EMPTY_TENANT);
+
+  const td = (f) => (v) => setDraft(prev => ({ ...prev, [f]: v }));
+
+  const add = () => {
+    if (!draft.name.trim()) return;
+    onUpdate({ tenants: [...(r.tenants || []), { ...draft, id: Date.now() }] });
+    setDraft(EMPTY_TENANT);
+    setShowForm(false);
+  };
+
+  const remove = (id) => onUpdate({ tenants: (r.tenants || []).filter(t => t.id !== id) });
+
+  const tenants = r.tenants || [];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mt-1">
+        <SectionLabel>Tenants</SectionLabel>
+        <button onClick={() => setShowForm(v => !v)}
+          className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 transition-colors mb-[-4px]">
+          <Plus size={11} />Add Tenant
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Name</label><input value={draft.name} onChange={e => td('name')(e.target.value)} placeholder="Full name" className={iCls()} /></div>
+            <div><label className={fLabel}>Phone</label><input value={draft.phone} onChange={e => td('phone')(e.target.value)} placeholder="Optional" className={iCls()} /></div>
+          </div>
+          <div><label className={fLabel}>Email</label><input type="email" value={draft.email} onChange={e => td('email')(e.target.value)} placeholder="Optional" className={iCls()} /></div>
+          <div><label className={fLabel}>Address</label><input value={draft.address} onChange={e => td('address')(e.target.value)} placeholder="Tenant address" className={iCls()} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Move-in Date</label><input type="date" value={draft.moveInDate} onChange={e => td('moveInDate')(e.target.value)} className={iCls()} /></div>
+            <div><label className={fLabel}>Move-out Date</label><input type="date" value={draft.moveOutDate} onChange={e => td('moveOutDate')(e.target.value)} className={iCls()} /></div>
+          </div>
+          <div><label className={fLabel}>Notes</label><input value={draft.notes} onChange={e => td('notes')(e.target.value)} placeholder="Optional notes" className={iCls()} /></div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={add}><Check size={11} />Save</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {tenants.length > 0 ? (
+        <div className="space-y-3">
+          {tenants.map(t => (
+            <div key={t.id} className="p-4 border border-slate-100 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-slate-800">{t.name}</span>
+                <button onClick={() => remove(t.id)} className="text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={12} /></button>
+              </div>
+              {t.address && <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1"><MapPin size={10} />{t.address}</div>}
+              {t.phone && <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1"><Phone size={10} />{t.phone}</div>}
+              {t.email && <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1"><Mail size={10} />{t.email}</div>}
+              <div className="flex items-center gap-3 mt-2">
+                {t.moveInDate && (
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <LogIn size={10} />Move-in: {t.moveInDate}
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <LogOut size={10} />Move-out: {t.moveOutDate || 'Still residing'}
+                </div>
+              </div>
+              {t.notes && <p className="text-xs text-slate-400 mt-2 italic">{t.notes}</p>}
+              <SectionLabel>Documents</SectionLabel>
+              <p className="text-xs text-slate-400 italic">No documents</p>
+            </div>
+          ))}
+        </div>
+      ) : !showForm && <p className="text-sm text-slate-400 italic">No tenants on record</p>}
+    </div>
+  );
+}
+
 // ─── Resident Detail Panel ────────────────────────────────────────────────────
 
 function ResidentDetail({ resident, onUpdate, onClose }) {
@@ -1165,6 +1255,7 @@ function ResidentDetail({ resident, onUpdate, onClose }) {
     { id: 'access',     label: 'Access' },
     { id: 'violations', label: 'Violations', count: resident.violations?.length || 0 },
     { id: 'household',  label: 'Household' },
+    { id: 'tenants',    label: 'Tenants' },
     { id: 'floormap',   label: 'Floor Map' },
   ];
 
@@ -1202,6 +1293,7 @@ function ResidentDetail({ resident, onUpdate, onClose }) {
         {tab === 'access'     && <AccessTab     r={resident} onUpdate={onUpdate} />}
         {tab === 'violations' && <ViolationsTab r={resident} onUpdate={onUpdate} />}
         {tab === 'household'  && <HouseholdTab  r={resident} onUpdate={onUpdate} />}
+        {tab === 'tenants'    && <TenantsTab    r={resident} onUpdate={onUpdate} />}
         {tab === 'floormap'   && <FloorMapTab   r={resident} />}
       </div>
     </div>
