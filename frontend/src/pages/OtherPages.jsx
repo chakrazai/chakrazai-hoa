@@ -52,9 +52,9 @@ export function Tax() {
 // ─── Violations ───────────────────────────────────────────────────────────────
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, X, Check } from 'lucide-react';
 import { Table, Th, Td, Tr, Tabs } from '../components/ui';
-import { violationsAPI } from '../lib/api';
+import { violationsAPI, residentAPI as vResidentAPI } from '../lib/api';
 
 const MOCK_VIOLATIONS = [
   { id:1, unit:'Unit 88',  owner:'Laura Kim',     type:'Parking',      description:'Vehicle in fire lane',                fine:75,  issuedDate:'Apr 26', status:'notice_sent'       },
@@ -67,14 +67,98 @@ const MOCK_VIOLATIONS = [
 ];
 const vStMap = { notice_sent:{l:'Notice Sent',c:'amber'}, hearing_pending:{l:'Hearing Pending',c:'amber'}, escalated:{l:'Escalated',c:'red'}, hearing_scheduled:{l:'Hearing Scheduled',c:'red'}, under_review:{l:'Under Review',c:'blue'}, second_notice:{l:'2nd Notice',c:'amber'} };
 
+const iV = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
+const lV = 'block text-xs font-medium text-slate-500 mb-1';
+
+function useResidents() {
+  const { data } = useQuery({ queryKey:['residents-dd'], queryFn:()=>vResidentAPI.list(1).then(r=>r.data), placeholderData:[] });
+  return (data || []).map(r => ({ id: r.id, unit: r.unit, name: r.owner_name || r.owner || r.ownerName || '' }));
+}
+
+function NewViolationModal({ onSave, onClose }) {
+  const residents = useResidents();
+  const today = new Date().toISOString().split('T')[0];
+  const [form, setForm] = useState({ residentId:'', type:'Parking', description:'', fine:75, issuedDate: today });
+  const [err, setErr] = useState('');
+  const set = (f) => (v) => setForm(p => ({ ...p, [f]: v }));
+  const sel = residents.find(r => String(r.id) === String(form.residentId));
+
+  const handleSave = () => {
+    if (!form.residentId) { setErr('Please select a resident'); return; }
+    if (!form.description.trim()) { setErr('Description is required'); return; }
+    onSave({ communityId:1, residentId: Number(form.residentId), type: form.type,
+              description: form.description, fine: form.fine, issuedDate: form.issuedDate,
+              unit: sel?.unit || '', owner: sel?.name || '' });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">New Violation</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"><X size={16}/></button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          {err && <p className="text-xs text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">{err}</p>}
+          <div>
+            <label className={lV}>Resident <span className="text-rose-500">*</span></label>
+            <select value={form.residentId} onChange={e => { set('residentId')(e.target.value); setErr(''); }} className={iV}>
+              <option value="">Select resident...</option>
+              {residents.map(r => <option key={r.id} value={r.id}>{r.unit} — {r.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lV}>Type</label>
+              <select value={form.type} onChange={e => set('type')(e.target.value)} className={iV}>
+                {['Parking','Landscaping','Noise','Modification','Pet','Other'].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={lV}>Fine ($) <span className="text-xs text-slate-400">max $100 (CA)</span></label>
+              <input type="number" min="0" max="100" value={form.fine} onChange={e => set('fine')(Number(e.target.value))} className={iV} />
+            </div>
+          </div>
+          <div>
+            <label className={lV}>Description <span className="text-rose-500">*</span></label>
+            <textarea value={form.description} onChange={e => { set('description')(e.target.value); setErr(''); }} rows={3}
+              placeholder="Describe the violation..." className={iV + ' resize-none'} />
+          </div>
+          <div>
+            <label className={lV}>Issued Date</label>
+            <input type="date" value={form.issuedDate} onChange={e => set('issuedDate')(e.target.value)} className={iV} />
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave}><Check size={13}/>Issue Violation</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Violations() {
+  const [showModal, setShowModal] = useState(false);
+  const [extra, setExtra] = useState([]);
   const { data: list } = useQuery({ queryKey:['violations'], queryFn:()=>violationsAPI.list(1).then(r=>r.data), placeholderData:MOCK_VIOLATIONS });
-  const violations = list || MOCK_VIOLATIONS;
+  const violations = [...(list || MOCK_VIOLATIONS), ...extra];
+
+  const handleSave = async (data) => {
+    try {
+      const { data: created } = await violationsAPI.create(data);
+      setExtra(prev => [...prev, { ...created, unit: data.unit, owner: data.owner, issuedDate: data.issuedDate }]);
+    } catch {
+      setExtra(prev => [...prev, { ...data, id: Date.now(), status: 'notice_sent' }]);
+    }
+    setShowModal(false);
+  };
 
   return (
     <div className="page-enter">
+      {showModal && <NewViolationModal onSave={handleSave} onClose={() => setShowModal(false)} />}
       <SectionHeader title="Violations" subtitle="Issue legally compliant notices with attorney-reviewed templates"
-        action={<Button variant="primary" size="sm"><Plus size={12}/>New Violation</Button>} />
+        action={<Button variant="primary" size="sm" onClick={() => setShowModal(true)}><Plus size={12}/>New Violation</Button>} />
       <Alert variant="warning" title="AB 130 Fine Cap — Action Required">California fines capped at $100/violation. Review fine schedule before sending new notices.</Alert>
       <div className="grid grid-cols-4 gap-4 mb-6">
         <MetricCard label="Open Violations"  value={violations.length} sub="Active" subVariant="warn" />
@@ -122,14 +206,92 @@ const MOCK_WORK_ORDERS = [
 const woStMap = { scheduled:{l:'Scheduled',c:'amber'}, in_progress:{l:'In Progress',c:'blue'}, pending_vendor:{l:'Pending Vendor',c:'gray'}, parts_ordered:{l:'Parts Ordered',c:'navy'}, completed:{l:'Completed',c:'green'} };
 const woPrMap = { critical:{l:'Critical',c:'red'}, urgent:{l:'Urgent',c:'red'}, high:{l:'High',c:'amber'}, normal:{l:'Normal',c:'gray'} };
 
+function NewWorkOrderModal({ onSave, onClose }) {
+  const residents = useResidents();
+  const [form, setForm] = useState({ location:'', reportedBy:'', issue:'', priority:'normal', scheduledDate:'' });
+  const [err, setErr] = useState('');
+  const set = (f) => (v) => setForm(p => ({ ...p, [f]: v }));
+
+  const handleSave = () => {
+    if (!form.location.trim()) { setErr('Location is required'); return; }
+    if (!form.issue.trim()) { setErr('Issue description is required'); return; }
+    onSave({ communityId:1, location: form.location, issue: form.issue,
+              priority: form.priority, scheduledDate: form.scheduledDate || null,
+              reportedBy: form.reportedBy });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">New Work Order</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"><X size={16}/></button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          {err && <p className="text-xs text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">{err}</p>}
+          <div>
+            <label className={lV}>Location <span className="text-rose-500">*</span></label>
+            <input value={form.location} onChange={e => { set('location')(e.target.value); setErr(''); }}
+              placeholder="e.g. Pool Area, Unit 42, Building 1 Lobby" className={iV} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lV}>Priority</label>
+              <select value={form.priority} onChange={e => set('priority')(e.target.value)} className={iV}>
+                <option value="critical">Critical</option>
+                <option value="urgent">Urgent</option>
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+              </select>
+            </div>
+            <div>
+              <label className={lV}>Scheduled Date</label>
+              <input type="date" value={form.scheduledDate} onChange={e => set('scheduledDate')(e.target.value)} className={iV} />
+            </div>
+          </div>
+          <div>
+            <label className={lV}>Reported By (Resident)</label>
+            <select value={form.reportedBy} onChange={e => set('reportedBy')(e.target.value)} className={iV}>
+              <option value="">Select resident (optional)</option>
+              {residents.map(r => <option key={r.id} value={r.id}>{r.unit} — {r.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={lV}>Issue Description <span className="text-rose-500">*</span></label>
+            <textarea value={form.issue} onChange={e => { set('issue')(e.target.value); setErr(''); }} rows={3}
+              placeholder="Describe the maintenance issue..." className={iV + ' resize-none'} />
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave}><Check size={13}/>Create Work Order</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Maintenance() {
+  const [showModal, setShowModal] = useState(false);
+  const [extra, setExtra] = useState([]);
   const { data: list } = useQuery({ queryKey:['maintenance'], queryFn:()=>maintenanceAPI.list(1).then(r=>r.data), placeholderData:MOCK_WORK_ORDERS });
-  const orders = list || MOCK_WORK_ORDERS;
+  const orders = [...(list || MOCK_WORK_ORDERS), ...extra];
+
+  const handleSave = async (data) => {
+    try {
+      const { data: created } = await maintenanceAPI.create(data);
+      setExtra(prev => [...prev, { ...created, id: created.wo_number || created.id, location: data.location, issue: data.issue, priority: data.priority, status: 'pending_vendor', vendor: null }]);
+    } catch {
+      setExtra(prev => [...prev, { ...data, id: `WO-NEW-${Date.now()}`, status: 'pending_vendor', vendor: null }]);
+    }
+    setShowModal(false);
+  };
 
   return (
     <div className="page-enter">
+      {showModal && <NewWorkOrderModal onSave={handleSave} onClose={() => setShowModal(false)} />}
       <SectionHeader title="Maintenance" subtitle="Work orders with SB 900 14-day SLA tracking"
-        action={<Button variant="primary" size="sm"><Plus size={12}/>New Work Order</Button>} />
+        action={<Button variant="primary" size="sm" onClick={() => setShowModal(true)}><Plus size={12}/>New Work Order</Button>} />
       <Alert variant="danger" title="SB 900 SLA Alert — WO-088 Gas Line Repair">14-day repair deadline is April 29. Confirm vendor has started on-site work.</Alert>
       <div className="grid grid-cols-4 gap-4 mb-6">
         <MetricCard label="Open Requests"  value={orders.filter(w=>w.status!=='completed').length} sub="2 pending vendor" subVariant="warn" />
