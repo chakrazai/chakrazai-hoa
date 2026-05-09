@@ -1490,9 +1490,15 @@ export function Residents() {
     residentAPI.list(COMMUNITY_ID)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          const loaded = data.map(fromDb);
-          setResidents(loaded);
-          syncToLs(loaded);
+          setResidents(prev => {
+            const fromApi = data.map(fromDb);
+            const apiIds = new Set(fromApi.map(r => r.id));
+            // Keep any locally-added residents (timestamp IDs) not yet in DB
+            const localOnly = prev.filter(r => !apiIds.has(r.id) && r.id > 1_000_000_000);
+            const merged = [...fromApi, ...localOnly];
+            syncToLs(merged);
+            return merged;
+          });
         }
       })
       .catch(() => {});
