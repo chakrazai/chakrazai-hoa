@@ -1463,11 +1463,18 @@ function toDb(r) {
 const COMMUNITY_ID = 1;
 const RESIDENTS_LS_KEY = 'hoa_residents_rich_v1';
 
-function syncToLs(list) {
+function lsGet() {
+  try { return JSON.parse(localStorage.getItem(RESIDENTS_LS_KEY) || '[]'); }
+  catch { return []; }
+}
+function lsSave(list) {
   try {
-    localStorage.setItem(RESIDENTS_LS_KEY, JSON.stringify(list));
+    // Only persist real residents (DB ids or locally-added with timestamp ids).
+    // Never persist SEED_RESIDENTS (ids 1-10).
+    const real = list.filter(r => r.id > 10 || r.id > 1_000_000_000);
+    localStorage.setItem(RESIDENTS_LS_KEY, JSON.stringify(real));
     localStorage.setItem('hoa_residents_v1', JSON.stringify(
-      list.map(r => ({ id: r.id, owner_name: r.ownerName, unit: r.unit, email: r.email || '', phone: r.phone || '' }))
+      real.map(r => ({ id: r.id, owner_name: r.ownerName, unit: r.unit, email: r.email || '', phone: r.phone || '' }))
     ));
   } catch {}
 }
@@ -1475,12 +1482,8 @@ function syncToLs(list) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Residents() {
-  const [residents, setResidents]       = useState(() => {
-    try {
-      const cached = JSON.parse(localStorage.getItem(RESIDENTS_LS_KEY) || 'null');
-      return cached?.length > 0 ? cached : SEED_RESIDENTS;
-    } catch { return SEED_RESIDENTS; }
-  });
+  const [residents, setResidents]       = useState(SEED_RESIDENTS);
+  const [loading, setLoading]           = useState(true);
   const [selected, setSelected]         = useState(null);
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -1489,45 +1492,55 @@ export function Residents() {
   useEffect(() => {
     residentAPI.list(COMMUNITY_ID)
       .then(({ data }) => {
-        if (data && data.length > 0) {
-          setResidents(prev => {
-            const fromApi = data.map(fromDb);
-            const apiIds = new Set(fromApi.map(r => r.id));
-            // Keep any locally-added residents (timestamp IDs) not yet in DB
-            const localOnly = prev.filter(r => !apiIds.has(r.id) && r.id > 1_000_000_000);
-            const merged = [...fromApi, ...localOnly];
-            syncToLs(merged);
-            return merged;
-          });
+        const fromApi = (data || []).map(fromDb);
+        if (fromApi.length > 0) {
+          // Merge: DB data is source of truth; also keep any local-only additions
+          // (timestamp IDs) not yet committed to DB.
+          const cached = lsGet();
+          const apiIds  = new Set(fromApi.map(r => r.id));
+          const pending = cached.filter(r => r.id > 1_000_000_000 && !apiIds.has(r.id));
+          const merged  = [...fromApi, ...pending];
+          setResidents(merged);
+          lsSave(merged);
+        } else {
+          // DB empty — check localStorage for any unsaved additions; else show demo seed.
+          const cached = lsGet();
+          if (cached.length > 0) setResidents(cached);
+          // else: keep SEED_RESIDENTS as demo placeholder
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // Network/DB error — restore from localStorage; keep SEED if nothing cached.
+        const cached = lsGet();
+        if (cached.length > 0) setResidents(cached);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { syncToLs(residents); }, [residents]);
-
   const updateResident = async (id, patch) => {
-    const base = residents.find(r => r.id === id) || {};
+    const base   = residents.find(r => r.id === id) || {};
     const merged = { ...base, ...patch };
-    setResidents(prev => prev.map(r => r.id === id ? merged : r));
+    setResidents(prev => {
+      const next = prev.map(r => r.id === id ? merged : r);
+      lsSave(next);
+      return next;
+    });
     setSelected(prev => prev?.id === id ? merged : prev);
-    try {
-      await residentAPI.update(id, toDb(merged));
-    } catch (err) {
-      console.error('Failed to save resident:', err);
-    }
+    try { await residentAPI.update(id, toDb(merged)); }
+    catch (err) { console.error('Resident update failed:', err); }
   };
 
   const addResident = async (data) => {
     try {
       const { data: created } = await residentAPI.create({ ...toDb(data), communityId: COMMUNITY_ID });
       const resident = fromDb(created);
-      setResidents(prev => [...prev, resident]);
+      setResidents(prev => { const next = [...prev, resident]; lsSave(next); return next; });
       setShowAddModal(false);
       setSelected(resident);
     } catch {
+      // DB unavailable — save locally with timestamp ID so it survives refresh.
       const fallback = { ...data, id: Date.now() };
-      setResidents(prev => [...prev, fallback]);
+      setResidents(prev => { const next = [...prev, fallback]; lsSave(next); return next; });
       setShowAddModal(false);
       setSelected(fallback);
     }
@@ -1570,7 +1583,10 @@ export function Residents() {
       </div>
 
       <Card padding={false} className={clsx('overflow-hidden', selected && 'flex')}>
-        {selected ? (
+        {loading && (
+          <div className="px-6 py-8 text-center text-xs text-slate-400">Loading residents from database…</div>
+        )}
+        {!loading && selected ? (
           <div className="w-72 flex-shrink-0 flex flex-col" style={{ height: 'calc(100vh - 260px)' }}>
             <div className="p-3 border-b border-slate-100 flex-shrink-0">
               <div className="relative">
@@ -1586,7 +1602,7 @@ export function Residents() {
               {filtered.length === 0 && <p className="text-xs text-slate-400 text-center py-8">No residents found</p>}
             </div>
           </div>
-        ) : (
+        ) : !loading && (
           <ResidentTable
             residents={filtered} onSelect={setSelected}
             search={search} onSearch={setSearch}
@@ -1594,7 +1610,7 @@ export function Residents() {
           />
         )}
 
-        {selected && (
+        {!loading && selected && (
           <div className="flex-1 overflow-hidden" style={{ height: 'calc(100vh - 260px)' }}>
             <ResidentDetail
               resident={selected}
