@@ -642,12 +642,13 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
   const [tab, setTab] = useState('overview');
   const [showCandForm, setShowCandForm] = useState(false);
   const [candDraft, setCandDraft] = useState({ name:'', unit:'', email:'', phone:'', bio:'' });
+  const resName = r => r.owner_name || r.ownerName || '';
   const existingNames = new Set((election.candidates || []).map(c => c.name));
-  const availableResidents = residents.filter(r => !existingNames.has(r.owner_name));
+  const availableResidents = residents.filter(r => !existingNames.has(resName(r)));
 
-  const selectResident = (ownerName) => {
-    const r = residents.find(x => x.owner_name === ownerName);
-    setCandDraft(d => ({ ...d, name: ownerName, unit: r?.unit || '', email: r?.email || '', phone: r?.phone || '' }));
+  const selectResident = (name) => {
+    const r = residents.find(x => resName(x) === name);
+    setCandDraft(d => ({ ...d, name, unit: r?.unit || '', email: r?.email || '', phone: r?.phone || '' }));
   };
 
   const tabs = [
@@ -755,7 +756,7 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
                     <select value={candDraft.name} onChange={e => selectResident(e.target.value)} className={selCls}>
                       <option value="">— Select resident —</option>
                       {availableResidents.map(r => (
-                        <option key={r.id} value={r.owner_name}>{r.owner_name} — Unit {r.unit}</option>
+                        <option key={r.id} value={resName(r)}>{resName(r)} — {r.unit}</option>
                       ))}
                     </select>
                   ) : (
@@ -854,6 +855,7 @@ export function ElectionsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
   const [residents, setResidents] = useState([]);
+  const [pageTab, setPageTab]     = useState('elections');
 
   useEffect(() => {
     const govElections = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || []; } catch { return []; } })();
@@ -868,7 +870,15 @@ export function ElectionsPage() {
   }, []);
 
   useEffect(() => {
-    residentAPI.list(COMMUNITY_ID).then(res => setResidents(res.data || [])).catch(() => {});
+    const loadFromCache = () => {
+      try {
+        const cached = JSON.parse(localStorage.getItem('hoa_residents_v1') || '[]');
+        if (cached.length > 0) setResidents(cached);
+      } catch {}
+    };
+    residentAPI.list(COMMUNITY_ID)
+      .then(res => { if (res.data?.length > 0) setResidents(res.data); else loadFromCache(); })
+      .catch(loadFromCache);
   }, []);
 
   useEffect(() => {

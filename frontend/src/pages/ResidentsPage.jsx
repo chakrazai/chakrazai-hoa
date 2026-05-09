@@ -1461,11 +1461,26 @@ function toDb(r) {
 }
 
 const COMMUNITY_ID = 1;
+const RESIDENTS_LS_KEY = 'hoa_residents_rich_v1';
+
+function syncToLs(list) {
+  try {
+    localStorage.setItem(RESIDENTS_LS_KEY, JSON.stringify(list));
+    localStorage.setItem('hoa_residents_v1', JSON.stringify(
+      list.map(r => ({ id: r.id, owner_name: r.ownerName, unit: r.unit, email: r.email || '', phone: r.phone || '' }))
+    ));
+  } catch {}
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Residents() {
-  const [residents, setResidents]       = useState(SEED_RESIDENTS);
+  const [residents, setResidents]       = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(RESIDENTS_LS_KEY) || 'null');
+      return cached?.length > 0 ? cached : SEED_RESIDENTS;
+    } catch { return SEED_RESIDENTS; }
+  });
   const [selected, setSelected]         = useState(null);
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -1474,10 +1489,16 @@ export function Residents() {
   useEffect(() => {
     residentAPI.list(COMMUNITY_ID)
       .then(({ data }) => {
-        if (data && data.length > 0) setResidents(data.map(fromDb));
+        if (data && data.length > 0) {
+          const loaded = data.map(fromDb);
+          setResidents(loaded);
+          syncToLs(loaded);
+        }
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => { syncToLs(residents); }, [residents]);
 
   const updateResident = async (id, patch) => {
     const base = residents.find(r => r.id === id) || {};
