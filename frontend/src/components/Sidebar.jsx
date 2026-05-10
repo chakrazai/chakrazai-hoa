@@ -3,8 +3,9 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Shield, CreditCard, BarChart2, Receipt,
   AlertTriangle, Wrench, Users, FolderOpen, MessageSquare,
-  ChevronDown, LogOut, Map, Layers, UserCheck, Vote, CalendarDays, ClipboardList, Building2,
-} from 'lucide-react';import { useAuthStore } from '../hooks/useStore';
+  ChevronDown, LogOut, Map, Layers, UserCheck, Vote, CalendarDays, ClipboardList, Building2, FileText,
+} from 'lucide-react';
+import { useAuthStore } from '../hooks/useStore';
 
 const navGroups = [
   { label: 'Overview', items: [
@@ -98,6 +99,18 @@ export default function Sidebar({ currentPage, onNavigate, community }) {
           </div>
         ))}
       </nav>
+
+      {/* Legal links */}
+      <div className="px-3 pb-1 flex gap-3">
+        <button onClick={() => onNavigate('privacy')}
+          className={clsx('flex items-center gap-1 text-[10px] transition-colors', currentPage === 'privacy' ? 'text-navy-600 font-semibold' : 'text-slate-400 hover:text-slate-600')}>
+          <Shield size={9} />Privacy
+        </button>
+        <button onClick={() => onNavigate('terms')}
+          className={clsx('flex items-center gap-1 text-[10px] transition-colors', currentPage === 'terms' ? 'text-navy-600 font-semibold' : 'text-slate-400 hover:text-slate-600')}>
+          <FileText size={9} />Terms
+        </button>
+      </div>
 
       {/* User footer */}
       <div className="px-3 py-3 border-t border-slate-100">

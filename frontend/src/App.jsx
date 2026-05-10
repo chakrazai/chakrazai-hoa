@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 
 import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities, BuildingPage, BoardMembersPage, ElectionsPage, MeetingsPage, BallotManagementPage, AmenitiesPage } from './pages/index.jsx';
 import Map from './pages/Map.jsx';
+import { PrivacyPolicyPage, TermsOfUsePage, LegalAcceptanceModal, getLegalAcceptance } from './pages/LegalPages.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -23,11 +24,12 @@ const pageTitles = {
   documents: 'Documents', communications: 'Communications', communities: 'Communities',
   amenities: 'Amenities', map: 'Community Map', building: 'Building Maps',
   boardmembers: 'Board Members', elections: 'Elections', meetings: 'Meetings',
-  ballots: 'Ballot Management',
+  ballots: 'Ballot Management', privacy: 'Privacy Policy', terms: 'Terms of Use',
 };
 
 function AppLayout() {
   const [page, setPage] = useState(() => localStorage.getItem('hoa_current_page') || 'dashboard');
+  const [legalAccepted, setLegalAccepted] = useState(() => !!getLegalAcceptance());
   const { token, fetchMe } = useAuthStore();
 
   useEffect(() => { if (token) fetchMe(); }, [token]);
@@ -55,10 +57,13 @@ function AppLayout() {
     elections:      <ElectionsPage />,
     ballots:        <BallotManagementPage />,
     meetings:       <MeetingsPage />,
+    privacy:        <PrivacyPolicyPage />,
+    terms:          <TermsOfUsePage />,
   };
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+      {!legalAccepted && <LegalAcceptanceModal onAccept={() => setLegalAccepted(true)} />}
       <Sidebar currentPage={page} onNavigate={setPage} />
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Topbar */}
