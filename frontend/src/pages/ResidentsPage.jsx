@@ -31,7 +31,10 @@ const SEED_RESIDENTS = [
     ownerName: 'Alex Thompson', coOwner: 'Jennifer Thompson',
     phone: '(916) 555-0101', email: 'a.thompson@email.com',
     moveInDate: 'Mar 2018', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
-    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-12', 'P-13'],
+    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: [
+      { space: 'P-12', make: 'Toyota', model: 'Camry', year: '2022', license: 'ABC1234' },
+      { space: 'P-13', make: 'Honda',  model: 'CR-V',  year: '2021', license: 'XYZ5678' },
+    ],
     violations: [],
     relatives: [
       { id: 1, name: 'Jennifer Thompson', relation: 'Spouse', phone: '(916) 555-0102', email: 'j.thompson@email.com' },
@@ -63,7 +66,7 @@ const SEED_RESIDENTS = [
     ownerName: 'Diana Foster', coOwner: '',
     phone: '(916) 555-0212', email: 'd.foster@email.com',
     moveInDate: 'Jun 2020', moveOutDate: '', balance: 150, portal: 'invited', autoPay: false, status: 'delinquent',
-    hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: ['P-24'],
+    hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: [{ space: 'P-24', make: 'Ford', model: 'F-150', year: '2020', license: 'DEF2345' }],
     violations: [
       { id: 1, type: 'Parking', description: 'Guest spot occupied 7+ days', fine: 50, issuedDate: 'Apr 24, 2026', status: 'hearing_pending' },
     ],
@@ -86,7 +89,7 @@ const SEED_RESIDENTS = [
     ownerName: 'Michael Torres', coOwner: 'Rosa Torres',
     phone: '(916) 555-0333', email: 'm.torres@email.com',
     moveInDate: 'Jan 2016', moveOutDate: '', balance: 900, portal: 'none', autoPay: false, status: 'collections',
-    hoaAmount: 150, hoaPaymentStatus: 'collections', parkingSpaces: ['P-33'],
+    hoaAmount: 150, hoaPaymentStatus: 'collections', parkingSpaces: [{ space: 'P-33', make: 'Chevrolet', model: 'Silverado', year: '2018', license: 'GHI3456' }],
     violations: [
       { id: 1, type: 'Landscaping', description: 'Unapproved front yard modification', fine: 100, issuedDate: 'Apr 22, 2026', status: 'escalated' },
     ],
@@ -104,7 +107,10 @@ const SEED_RESIDENTS = [
     ownerName: 'Sarah Chen', coOwner: 'David Chen',
     phone: '(916) 555-0442', email: 's.chen@email.com',
     moveInDate: 'Sep 2019', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
-    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-42', 'P-43'],
+    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: [
+      { space: 'P-42', make: 'Tesla',  model: 'Model 3', year: '2023', license: 'JKL4567' },
+      { space: 'P-43', make: 'Toyota', model: 'RAV4',    year: '2021', license: 'MNO5678' },
+    ],
     violations: [],
     relatives: [
       { id: 1, name: 'David Chen', relation: 'Spouse', phone: '(916) 555-0443', email: 'd.chen@email.com' },
@@ -132,7 +138,7 @@ const SEED_RESIDENTS = [
     ownerName: 'Carlos Rivera', coOwner: '',
     phone: '(916) 555-0544', email: 'c.rivera@email.com',
     moveInDate: 'Feb 2021', moveOutDate: '', balance: 100, portal: 'active', autoPay: false, status: 'violation',
-    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-44'],
+    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: [{ space: 'P-44', make: 'BMW', model: 'X5', year: '2022', license: 'PQR6789' }],
     violations: [{ id: 1, type: 'Noise', description: 'Repeated late-night disturbance', fine: 100, issuedDate: 'Apr 15, 2026', status: 'hearing_scheduled' }],
     relatives: [{ id: 1, name: 'Maria Rivera', relation: 'Parent', phone: '(916) 555-0545', email: '' }],
     tenants: [],
@@ -148,7 +154,7 @@ const SEED_RESIDENTS = [
     ownerName: 'Kevin Zhang', coOwner: 'Linda Zhang',
     phone: '(916) 555-0655', email: 'k.zhang@email.com',
     moveInDate: 'Nov 2017', moveOutDate: '', balance: 150, portal: 'active', autoPay: false, status: 'delinquent',
-    hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: ['P-55'],
+    hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: [{ space: 'P-55', make: 'Audi', model: 'Q7', year: '2021', license: 'STU7890' }],
     violations: [],
     relatives: [{ id: 1, name: 'Linda Zhang', relation: 'Spouse', phone: '(916) 555-0656', email: 'l.zhang@email.com' }],
     tenants: [],
@@ -164,7 +170,7 @@ const SEED_RESIDENTS = [
     ownerName: 'Amanda Liu', coOwner: '',
     phone: '(916) 555-0767', email: 'a.liu@email.com',
     moveInDate: 'Apr 2022', moveOutDate: '', balance: 300, portal: 'active', autoPay: false, status: 'delinquent',
-    hoaAmount: 150, hoaPaymentStatus: 'delinquent', parkingSpaces: ['P-67'],
+    hoaAmount: 150, hoaPaymentStatus: 'delinquent', parkingSpaces: [{ space: 'P-67', make: 'Nissan', model: 'Altima', year: '2019', license: 'VWX8901' }],
     violations: [], relatives: [], tenants: [], guestParkingTags: [],
     garageFobs: [{ id: 1, fobId: 'GF-067', status: 'active', issuedDate: 'Apr 5, 2022', lastUsed: 'Apr 30, 2026' }],
     garageFobLog: [{ id: 1, date: 'Apr 30, 2026', time: '9:30 AM', action: 'Entry', fobId: 'GF-067', gate: 'Gate A' }],
@@ -177,7 +183,10 @@ const SEED_RESIDENTS = [
     ownerName: 'Tom Nakamura', coOwner: 'Yuki Nakamura',
     phone: '(916) 555-0883', email: 't.nakamura@email.com',
     moveInDate: 'Jul 2015', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
-    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-83', 'P-84'],
+    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: [
+      { space: 'P-83', make: 'Lexus',  model: 'RX 350', year: '2022', license: 'YZA9012' },
+      { space: 'P-84', make: 'Toyota', model: 'Sienna',  year: '2020', license: 'BCD0123' },
+    ],
     violations: [],
     relatives: [
       { id: 1, name: 'Yuki Nakamura', relation: 'Spouse', phone: '(916) 555-0884', email: 'y.nakamura@email.com' },
@@ -205,7 +214,7 @@ const SEED_RESIDENTS = [
     ownerName: 'Laura Kim', coOwner: '',
     phone: '(916) 555-0988', email: 'l.kim@email.com',
     moveInDate: 'Aug 2023', moveOutDate: '', balance: 150, portal: 'active', autoPay: false, status: 'delinquent',
-    hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: ['P-88'],
+    hoaAmount: 150, hoaPaymentStatus: 'late', parkingSpaces: [{ space: 'P-88', make: 'Mercedes', model: 'GLE', year: '2023', license: 'EFG1234' }],
     violations: [{ id: 1, type: 'Parking', description: 'Vehicle in fire lane', fine: 75, issuedDate: 'Apr 26, 2026', status: 'notice_sent' }],
     relatives: [{ id: 1, name: 'James Kim', relation: 'Sibling', phone: '(916) 555-0989', email: 'j.kim@email.com' }],
     tenants: [],
@@ -221,7 +230,10 @@ const SEED_RESIDENTS = [
     ownerName: 'Maria Garcia', coOwner: 'Jose Garcia',
     phone: '(916) 555-1190', email: 'm.garcia@email.com',
     moveInDate: 'May 2014', moveOutDate: '', balance: 0, portal: 'active', autoPay: true, status: 'good',
-    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: ['P-119', 'P-120'],
+    hoaAmount: 150, hoaPaymentStatus: 'current', parkingSpaces: [
+      { space: 'P-119', make: 'Porsche', model: 'Cayenne', year: '2023', license: 'HIJ2345' },
+      { space: 'P-120', make: 'Tesla',   model: 'Model Y',  year: '2022', license: 'KLM3456' },
+    ],
     violations: [],
     relatives: [
       { id: 1, name: 'Jose Garcia', relation: 'Spouse', phone: '(916) 555-1191', email: 'j.garcia@email.com' },
@@ -304,18 +316,17 @@ const EMPTY_FORM = {
 
 function AddResidentModal({ onSave, onClose }) {
   const [form, setForm] = useState(EMPTY_FORM);
-  const [parkingInput, setParkingInput] = useState('');
+  const [carDraft, setCarDraft] = useState({ space: '', make: '', model: '', year: '', license: '' });
   const [errors, setErrors] = useState({});
 
   const set = (f) => (v) => setForm(prev => ({ ...prev, [f]: v }));
 
-  const addSpace = () => {
-    const s = parkingInput.trim().toUpperCase();
-    if (s && !form.parkingSpaces.includes(s)) {
-      set('parkingSpaces')([...form.parkingSpaces, s]);
-      setParkingInput('');
-    }
+  const addCar = () => {
+    if (!carDraft.space.trim()) return;
+    set('parkingSpaces')([...form.parkingSpaces, { ...carDraft, space: carDraft.space.trim().toUpperCase() }]);
+    setCarDraft({ space: '', make: '', model: '', year: '', license: '' });
   };
+  const removeCar = (idx) => set('parkingSpaces')(form.parkingSpaces.filter((_, i) => i !== idx));
 
   const handleSave = () => {
     const e = {};
@@ -427,23 +438,30 @@ function AddResidentModal({ onSave, onClose }) {
 
           {/* Parking */}
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Parking Spaces</p>
-            <div className="flex gap-2 mb-2">
-              <input
-                value={parkingInput} onChange={e => setParkingInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSpace()}
-                placeholder="e.g. P-15" className={clsx(iCls(), 'flex-1')}
-              />
-              <Button variant="secondary" size="sm" onClick={addSpace}><Plus size={12} />Add</Button>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Vehicles &amp; Parking</p>
+            <div className="p-3 bg-slate-50 rounded-xl space-y-2 mb-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className={fLabel}>Space #</label><input value={carDraft.space} onChange={e => setCarDraft(d=>({...d,space:e.target.value}))} placeholder="P-15" className={iCls()} /></div>
+                <div><label className={fLabel}>Year</label><input value={carDraft.year} onChange={e => setCarDraft(d=>({...d,year:e.target.value}))} placeholder="2023" className={iCls()} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className={fLabel}>Make</label><input value={carDraft.make} onChange={e => setCarDraft(d=>({...d,make:e.target.value}))} placeholder="Toyota" className={iCls()} /></div>
+                <div><label className={fLabel}>Model</label><input value={carDraft.model} onChange={e => setCarDraft(d=>({...d,model:e.target.value}))} placeholder="Camry" className={iCls()} /></div>
+              </div>
+              <div><label className={fLabel}>License Plate</label><input value={carDraft.license} onChange={e => setCarDraft(d=>({...d,license:e.target.value}))} placeholder="ABC1234" className={iCls()} /></div>
+              <Button variant="secondary" size="sm" onClick={addCar}><Plus size={11}/>Add Vehicle</Button>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {form.parkingSpaces.map(s => (
-                <div key={s} className="flex items-center gap-1 px-2 py-1 bg-navy-50 rounded-lg">
-                  <Car size={11} className="text-navy-600" />
-                  <span className="text-xs font-semibold text-navy-700">{s}</span>
-                  <button onClick={() => set('parkingSpaces')(form.parkingSpaces.filter(x => x !== s))} className="text-slate-400 hover:text-rose-500 ml-0.5 transition-colors">
-                    <X size={10} />
-                  </button>
+            <div className="space-y-1.5">
+              {form.parkingSpaces.map((c, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2 bg-navy-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Car size={12} className="text-navy-600" />
+                    <div>
+                      <span className="text-xs font-bold text-navy-700">{c.space}</span>
+                      <span className="text-xs text-slate-500 ml-2">{c.year} {c.make} {c.model} · {c.license}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => removeCar(i)} className="text-slate-400 hover:text-rose-500 transition-colors"><X size={11}/></button>
                 </div>
               ))}
             </div>
@@ -680,18 +698,27 @@ function FinancialsTab({ r, onUpdate }) {
 // ─── Tab: Parking (interactive) ───────────────────────────────────────────────
 
 function ParkingTab({ r, onUpdate }) {
-  const [spaceInput, setSpaceInput]   = useState('');
+  const [showCarForm, setShowCarForm] = useState(false);
+  const [carDraft, setCarDraft]       = useState({ space: '', make: '', model: '', year: '', license: '' });
+  const [editIdx, setEditIdx]         = useState(null);
   const [showTagForm, setShowTagForm] = useState(false);
   const [tagDraft, setTagDraft]       = useState({ tagId: '', vehicle: '', licensePlate: '', issuedDate: '', expiryDate: '' });
 
-  const addSpace = () => {
-    const s = spaceInput.trim().toUpperCase();
-    if (s && !r.parkingSpaces.includes(s)) {
-      onUpdate({ parkingSpaces: [...r.parkingSpaces, s] });
-      setSpaceInput('');
+  const saveCar = () => {
+    if (!carDraft.space.trim()) return;
+    const entry = { ...carDraft, space: carDraft.space.trim().toUpperCase() };
+    if (editIdx !== null) {
+      const next = r.parkingSpaces.map((c, i) => i === editIdx ? entry : c);
+      onUpdate({ parkingSpaces: next });
+      setEditIdx(null);
+    } else {
+      onUpdate({ parkingSpaces: [...r.parkingSpaces, entry] });
     }
+    setCarDraft({ space: '', make: '', model: '', year: '', license: '' });
+    setShowCarForm(false);
   };
-  const removeSpace = (s) => onUpdate({ parkingSpaces: r.parkingSpaces.filter(x => x !== s) });
+  const removeCar = (idx) => onUpdate({ parkingSpaces: r.parkingSpaces.filter((_, i) => i !== idx) });
+  const editCar = (idx) => { setCarDraft({ ...r.parkingSpaces[idx] }); setEditIdx(idx); setShowCarForm(true); };
 
   const addTag = () => {
     if (!tagDraft.tagId.trim()) return;
@@ -707,24 +734,54 @@ function ParkingTab({ r, onUpdate }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mt-1">
-        <SectionLabel>Assigned Parking Spaces</SectionLabel>
+      <div className="flex items-center justify-between mt-1 mb-2">
+        <SectionLabel>Vehicles &amp; Parking</SectionLabel>
+        <button onClick={() => { setCarDraft({ space:'', make:'', model:'', year:'', license:'' }); setEditIdx(null); setShowCarForm(v => !v); }}
+          className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 transition-colors">
+          <Plus size={11} />Add Vehicle
+        </button>
       </div>
-      <div className="flex flex-wrap gap-2 mb-3">
-        {r.parkingSpaces.map(s => (
-          <div key={s} className="flex items-center gap-1.5 px-3 py-1.5 bg-navy-50 rounded-lg">
-            <Car size={11} className="text-navy-600" />
-            <span className="text-sm font-semibold text-navy-700">{s}</span>
-            <button onClick={() => removeSpace(s)} className="text-slate-400 hover:text-rose-500 ml-0.5 transition-colors"><X size={10} /></button>
+
+      {showCarForm && (
+        <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Space #</label><input value={carDraft.space} onChange={e => setCarDraft(d=>({...d,space:e.target.value}))} placeholder="P-00" className={iCls()} /></div>
+            <div><label className={fLabel}>Year</label><input value={carDraft.year} onChange={e => setCarDraft(d=>({...d,year:e.target.value}))} placeholder="2024" className={iCls()} /></div>
           </div>
-        ))}
-        <div className="flex items-center gap-1">
-          <input value={spaceInput} onChange={e => setSpaceInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addSpace()}
-            placeholder="P-00" className="px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg w-20 focus:outline-none focus:ring-2 focus:ring-navy-300" />
-          <Button variant="secondary" size="sm" onClick={addSpace}><Plus size={11} /></Button>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Make</label><input value={carDraft.make} onChange={e => setCarDraft(d=>({...d,make:e.target.value}))} placeholder="Toyota" className={iCls()} /></div>
+            <div><label className={fLabel}>Model</label><input value={carDraft.model} onChange={e => setCarDraft(d=>({...d,model:e.target.value}))} placeholder="Camry" className={iCls()} /></div>
+          </div>
+          <div><label className={fLabel}>License Plate</label><input value={carDraft.license} onChange={e => setCarDraft(d=>({...d,license:e.target.value}))} placeholder="ABC1234" className={iCls()} /></div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={saveCar}><Check size={11}/>{editIdx !== null ? 'Update' : 'Save'}</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setShowCarForm(false); setEditIdx(null); }}>Cancel</Button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {r.parkingSpaces.length > 0 ? (
+        <div className="space-y-2 mb-4">
+          {r.parkingSpaces.map((c, idx) => (
+            <div key={idx} className="p-3 bg-slate-50 rounded-xl">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <Car size={14} className="text-navy-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-navy-700">{c.space}</p>
+                    <p className="text-xs text-slate-700 font-medium">{[c.year, c.make, c.model].filter(Boolean).join(' ') || '—'}</p>
+                    {c.license && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{c.license}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => editCar(idx)} className="text-slate-400 hover:text-navy-600 transition-colors"><Edit2 size={12}/></button>
+                  <button onClick={() => removeCar(idx)} className="text-slate-400 hover:text-rose-500 transition-colors"><Trash2 size={12}/></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : !showCarForm && <p className="text-xs text-slate-400 italic mb-4">No vehicles registered</p>}
 
       <div className="flex items-center justify-between">
         <SectionLabel>Guest Parking Tags</SectionLabel>
@@ -1382,10 +1439,17 @@ function ResidentTable({ residents, onSelect, search, onSearch, statusFilter, on
                   <Td><div className="flex items-center gap-1 text-xs text-slate-500"><Phone size={10} className="text-slate-300" />{r.phone}</div></Td>
                   <Td className="text-xs text-slate-400">{r.email}</Td>
                   <Td>
-                    <div className="flex flex-wrap gap-1">
-                      {r.parkingSpaces.map(s => (
-                        <span key={s} className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{s}</span>
-                      ))}
+                    <div className="flex flex-col gap-0.5">
+                      {r.parkingSpaces.map((c, i) => {
+                        const sp = typeof c === 'string' ? c : c.space;
+                        const vehicle = typeof c === 'object' ? [c.year, c.make, c.model].filter(Boolean).join(' ') : '';
+                        return (
+                          <div key={i}>
+                            <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{sp}</span>
+                            {vehicle && <span className="text-[10px] text-slate-400 ml-1">{vehicle}</span>}
+                          </div>
+                        );
+                      })}
                     </div>
                   </Td>
                   <Td><Badge variant={pay.c}>{pay.l}</Badge></Td>
