@@ -192,25 +192,61 @@ function BoardMemberDetail({ member, color, onUpdate, onClose }) {
   );
 }
 
+// Derive board members from elected candidates in closed Board-type elections.
+function electionsToBoard(elections) {
+  const boardElections = elections
+    .filter(e => e.type === 'Board' && e.status === 'closed' && e.certified)
+    .sort((a, b) => b.id - a.id); // most recent first
+
+  const seen = new Set();
+  const members = [];
+  for (const election of boardElections) {
+    for (const c of (election.candidates || [])) {
+      if (!c.elected || seen.has(c.name)) continue;
+      seen.add(c.name);
+      members.push({
+        id:         c.id,
+        name:       c.name,
+        role:       c.role || 'Member At Large',
+        email:      c.email || '',
+        phone:      c.phone || '',
+        termStart:  election.startDate || '',
+        termEnd:    election.endDate   || '',
+        status:     'active',
+        committees: c.committees || [],
+        bio:        c.bio || '',
+        unit:       c.unit || '',
+        electionTitle: election.title,
+        activityLog: [
+          { id: 1, date: election.endDate || '', action: 'Elected', details: `Elected in ${election.title}`, by: 'Election', variant: 'green' },
+        ],
+      });
+    }
+  }
+  return members;
+}
+
 export function BoardMembersPage() {
-  const [members, setMembers] = useState(SEED_BOARD);
+  const [members, setMembers] = useState(() => {
+    try {
+      const elections = JSON.parse(localStorage.getItem(LS_KEY_GOV)) || [];
+      const fromElections = electionsToBoard(elections);
+      return fromElections.length > 0 ? fromElections : SEED_BOARD;
+    } catch { return SEED_BOARD; }
+  });
   const [selected, setSelected] = useState(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name:'', role:'Member At Large', email:'', phone:'', termStart:'', termEnd:'', status:'active', committees:[], bio:'' });
   const [search, setSearch] = useState('');
+
+  // Re-derive whenever elections change in localStorage (e.g. after marking elected).
+  useEffect(() => {
+    const elections = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || []; } catch { return []; } })();
+    const fromElections = electionsToBoard(elections);
+    if (fromElections.length > 0) setMembers(fromElections);
+  }, []);
 
   const update = (id, patch) => {
     setMembers(p => p.map(m => m.id === id ? { ...m, ...patch } : m));
     setSelected(p => p?.id === id ? { ...p, ...patch } : p);
-  };
-  const remove = id => { setMembers(p => p.filter(m => m.id !== id)); setSelected(null); };
-  const add = () => {
-    if (!form.name.trim()) return;
-    const m = { ...form, id: Date.now(), activityLog: [{ id: 1, date: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), action:'Added', details:'Member added to board', by:'Admin', variant:'green' }] };
-    setMembers(p => [...p, m]);
-    setSelected(m);
-    setShowAdd(false);
-    setForm({ name:'', role:'Member At Large', email:'', phone:'', termStart:'', termEnd:'', status:'active', committees:[], bio:'' });
   };
 
   const filtered = useMemo(() => members.filter(m =>
@@ -222,40 +258,7 @@ export function BoardMembersPage() {
 
   return (
     <div className="page-enter">
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900">Add Board Member</h2>
-              <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"><X size={16}/></button>
-            </div>
-            <div className="px-6 py-5 space-y-3 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className={fLabel}>Name *</label><input value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} className={iCls} placeholder="Full name"/></div>
-                <div><label className={fLabel}>Role</label>
-                  <select value={form.role} onChange={e => setForm(p=>({...p,role:e.target.value}))} className={selCls}>
-                    {['Board President','Vice President','Treasurer','Secretary','Member At Large'].map(r=><option key={r}>{r}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div><label className={fLabel}>Email</label><input value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} className={iCls}/></div>
-              <div><label className={fLabel}>Phone</label><input value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))} className={iCls}/></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className={fLabel}>Term Start</label><input value={form.termStart} onChange={e=>setForm(p=>({...p,termStart:e.target.value}))} placeholder="Jan 2024" className={iCls}/></div>
-                <div><label className={fLabel}>Term End</label><input value={form.termEnd} onChange={e=>setForm(p=>({...p,termEnd:e.target.value}))} placeholder="Dec 2025" className={iCls}/></div>
-              </div>
-              <div><label className={fLabel}>Bio</label><textarea value={form.bio} onChange={e=>setForm(p=>({...p,bio:e.target.value}))} rows={2} className={iCls}/></div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
-              <Button variant="primary" onClick={add}><Check size={13}/>Add Member</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <SectionHeader title="Board Members" subtitle="Current HOA board, roles, terms and activity"
-        action={<Button variant="primary" size="sm" onClick={() => setShowAdd(true)}><Plus size={12}/>Add Member</Button>} />
+      <SectionHeader title="Board Members" subtitle="Elected board members from certified elections" />
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <MetricCard label="Total Members"  value={members.length} sub="Board seats" />
@@ -297,17 +300,19 @@ export function BoardMembersPage() {
               </div>
             </div>
             <div className="px-5 py-1">
+              {filtered.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-8">No elected board members found. Mark candidates as elected in a closed Board election to populate this page.</p>
+              )}
               <Table>
-                <thead><tr><Th>Member</Th><Th>Role</Th><Th>Committees</Th><Th>Term</Th><Th>Status</Th><Th></Th></tr></thead>
+                <thead><tr><Th>Member</Th><Th>Role</Th><Th>Elected From</Th><Th>Term</Th><Th>Status</Th></tr></thead>
                 <tbody>
                   {filtered.map((m, i) => (
                     <Tr key={m.id} onClick={() => setSelected(m)}>
-                      <Td><div className="flex items-center gap-2.5"><Avatar name={m.name} size="sm" color={BOARD_COLORS[i%BOARD_COLORS.length]}/><div><p className="font-semibold text-slate-800 text-xs">{m.name}</p><p className="text-[11px] text-slate-400">{m.email}</p></div></div></Td>
+                      <Td><div className="flex items-center gap-2.5"><Avatar name={m.name} size="sm" color={BOARD_COLORS[i%BOARD_COLORS.length]}/><div><p className="font-semibold text-slate-800 text-xs">{m.name}</p><p className="text-[11px] text-slate-400">{m.email || m.unit}</p></div></div></Td>
                       <Td className="text-xs text-slate-700 font-medium">{m.role}</Td>
-                      <Td><div className="flex flex-wrap gap-1">{m.committees.map(c=><Badge key={c} variant="blue">{c}</Badge>)}</div></Td>
+                      <Td className="text-xs text-slate-500 max-w-[180px] truncate">{m.electionTitle || '—'}</Td>
                       <Td className="text-xs text-slate-500">{m.termStart} – {m.termEnd}</Td>
                       <Td><Badge variant={m.status==='active'?'green':'gray'}>{m.status}</Badge></Td>
-                      <Td><button onClick={e=>{e.stopPropagation();remove(m.id)}} className="text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={13}/></button></Td>
                     </Tr>
                   ))}
                 </tbody>
