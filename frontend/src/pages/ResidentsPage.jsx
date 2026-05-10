@@ -6,7 +6,7 @@ import {
   AlertTriangle, Users, ChevronRight, Home, Shield,
   LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send, Paperclip,
 } from 'lucide-react';
-import { AttachmentChip } from './OtherPages.jsx';
+import { AttachmentChip, DocPickerModal } from './OtherPages.jsx';
 import { getResidentFloor } from './BuildingPage';
 import { clsx } from 'clsx';
 import {
@@ -1310,6 +1310,7 @@ function CommunicationsTab({ r }) {
   const [channel, setChannel] = useState('Email + Portal');
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [showDocPicker, setShowDocPicker] = useState(false);
   const fileInputRef = useRef(null);
   const [localComms, setLocalComms] = useState(() => {
     try { return JSON.parse(localStorage.getItem('hoa_comms_v1') || '[]'); } catch { return []; }
@@ -1381,12 +1382,23 @@ function CommunicationsTab({ r }) {
             className={iCls() + ' resize-none font-mono'} />
         </div>
         <div>
+          {showDocPicker && (
+            <DocPickerModal
+              existingIds={attachments.map(a => a.sourceDocId).filter(Boolean)}
+              onAdd={(docs) => setAttachments(prev => [...prev, ...docs])}
+              onClose={() => setShowDocPicker(false)}
+            />
+          )}
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles}
             accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.zip,.txt,.csv" />
           <div className="flex items-center gap-2 flex-wrap">
             <button type="button" onClick={() => fileInputRef.current?.click()}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-500 border border-slate-200 rounded-lg hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-all bg-white">
               <Paperclip size={10} />Attach
+            </button>
+            <button type="button" onClick={() => setShowDocPicker(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-500 border border-slate-200 rounded-lg hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-all bg-white">
+              <FileText size={10} />From Documents
             </button>
             {attachments.map(a => (
               <AttachmentChip key={a.id} file={a} onRemove={(id) => setAttachments(prev => prev.filter(x => x.id !== id))} />

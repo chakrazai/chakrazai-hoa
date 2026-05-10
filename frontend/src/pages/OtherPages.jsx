@@ -455,36 +455,86 @@ export function Residents() {
 }
 
 // ─── Documents ────────────────────────────────────────────────────────────────
-import { FileText, FolderOpen, Upload } from 'lucide-react';
+import { FileText, FolderOpen, Upload, Trash2 as TrashDoc } from 'lucide-react';
 import { documentAPI } from '../lib/api';
 
 const MOCK_GOV_DOCS = [
-  { id:1, name:"CC&Rs — Oakwood Estates", version:'v3.2', updated:'Jan 2025', status:'current',      note:null },
-  { id:2, name:'Bylaws',                  version:'v2.1', updated:'Mar 2024', status:'current',      note:null },
-  { id:3, name:'Rules & Regulations',     version:'v4.0', updated:'Jan 2026', status:'current',      note:null },
-  { id:4, name:'Collection Policy',       version:'v1.8', updated:'Dec 2024', status:'needs_update', note:'Needs update for AB 130 fine caps' },
-  { id:5, name:'Solar Panel Policy',      version:'v1.0', updated:'Mar 2025', status:'current',      note:null },
-  { id:6, name:'Architectural Guidelines',version:'v2.0', updated:'Jun 2023', status:'review_needed',note:'Over 2 years since last review' },
-  { id:7, name:'Pet Policy',              version:'v1.5', updated:'Feb 2024', status:'current',      note:null },
-  { id:8, name:'Parking Policy',          version:'v3.1', updated:'Jan 2026', status:'current',      note:null },
+  { id:'gov-1', name:"CC&Rs — Oakwood Estates", version:'v3.2', updated:'Jan 2025', status:'current',      note:null, category:'governing' },
+  { id:'gov-2', name:'Bylaws',                  version:'v2.1', updated:'Mar 2024', status:'current',      note:null, category:'governing' },
+  { id:'gov-3', name:'Rules & Regulations',     version:'v4.0', updated:'Jan 2026', status:'current',      note:null, category:'governing' },
+  { id:'gov-4', name:'Collection Policy',       version:'v1.8', updated:'Dec 2024', status:'needs_update', note:'Needs update for AB 130 fine caps', category:'governing' },
+  { id:'gov-5', name:'Solar Panel Policy',      version:'v1.0', updated:'Mar 2025', status:'current',      note:null, category:'governing' },
+  { id:'gov-6', name:'Architectural Guidelines',version:'v2.0', updated:'Jun 2023', status:'review_needed',note:'Over 2 years since last review', category:'governing' },
+  { id:'gov-7', name:'Pet Policy',              version:'v1.5', updated:'Feb 2024', status:'current',      note:null, category:'governing' },
+  { id:'gov-8', name:'Parking Policy',          version:'v3.1', updated:'Jan 2026', status:'current',      note:null, category:'governing' },
 ];
 const MOCK_FIN_DOCS = [
-  { id:1, name:'2026 Annual Budget',              desc:'CA Civil Code 5300 compliant' },
-  { id:2, name:'Reserve Fund Study 2024',          desc:'61% funded — next due 2027' },
-  { id:3, name:'April 2026 Financial Statement',   desc:'Auto-generated and distributed' },
-  { id:4, name:'2025 Annual Audit Report',         desc:'CPA reviewed and filed' },
-  { id:5, name:'Insurance Certificate 2026',       desc:'$5M general liability' },
+  { id:'fin-1', name:'2026 Annual Budget',              desc:'CA Civil Code 5300 compliant', category:'financial' },
+  { id:'fin-2', name:'Reserve Fund Study 2024',         desc:'61% funded — next due 2027',   category:'financial' },
+  { id:'fin-3', name:'April 2026 Financial Statement',  desc:'Auto-generated and distributed', category:'financial' },
+  { id:'fin-4', name:'2025 Annual Audit Report',        desc:'CPA reviewed and filed',        category:'financial' },
+  { id:'fin-5', name:'Insurance Certificate 2026',      desc:'$5M general liability',         category:'financial' },
 ];
 const dStMap = { current:{l:'Current',c:'green'}, needs_update:{l:'Needs Update',c:'red'}, review_needed:{l:'Review Recommended',c:'amber'} };
 
+const DOCS_LS_KEY = 'hoa_documents_v1';
+export function lsGetDocs() {
+  try { return JSON.parse(localStorage.getItem(DOCS_LS_KEY) || '[]'); } catch { return []; }
+}
+function lsSaveDoc(doc) {
+  try {
+    const list = lsGetDocs();
+    list.unshift(doc);
+    localStorage.setItem(DOCS_LS_KEY, JSON.stringify(list.slice(0, 200)));
+  } catch {}
+}
+function lsDeleteDoc(id) {
+  try {
+    const list = lsGetDocs().filter(d => d.id !== id);
+    localStorage.setItem(DOCS_LS_KEY, JSON.stringify(list));
+  } catch {}
+}
+
 export function Documents() {
+  const uploadRef = useRef(null);
+  const [uploaded, setUploaded] = useState(() => lsGetDocs());
   const { data: docs } = useQuery({ queryKey:['documents'], queryFn:()=>documentAPI.list(1).then(r=>r.data), placeholderData:MOCK_GOV_DOCS });
   const govDocs = docs || MOCK_GOV_DOCS;
 
+  const handleUpload = (e) => {
+    const MAX = 10 * 1024 * 1024;
+    Array.from(e.target.files || []).forEach(file => {
+      const id = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const base = { id, name: file.name, size: file.size, type: file.type, uploadedAt: today, category: 'uploaded' };
+      if (file.size <= MAX) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const doc = { ...base, dataUrl: ev.target.result };
+          lsSaveDoc(doc);
+          setUploaded(prev => [doc, ...prev]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const doc = { ...base, dataUrl: null };
+        lsSaveDoc(doc);
+        setUploaded(prev => [doc, ...prev]);
+      }
+    });
+    e.target.value = '';
+  };
+
+  const deleteUploaded = (id) => {
+    lsDeleteDoc(id);
+    setUploaded(prev => prev.filter(d => d.id !== id));
+  };
+
   return (
     <div className="page-enter">
+      <input ref={uploadRef} type="file" multiple className="hidden" onChange={handleUpload}
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.zip,.txt,.csv" />
       <SectionHeader title="Documents" subtitle="Governing docs, financial records, and AI-assisted drafting"
-        action={<><Button variant="secondary" size="sm"><Upload size={12}/>Upload</Button><Button variant="primary" size="sm">Draft with AI</Button></>} />
+        action={<><Button variant="secondary" size="sm" onClick={() => uploadRef.current?.click()}><Upload size={12}/>Upload</Button><Button variant="primary" size="sm">Draft with AI</Button></>} />
       <Alert variant="warning" title="Collection Policy needs update — AB 130 fine caps">Update before next enforcement cycle.</Alert>
       <div className="grid grid-cols-2 gap-5">
         <Card padding={false}>
@@ -508,23 +558,128 @@ export function Documents() {
             );
           })}
         </Card>
-        <Card padding={false}>
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-            <FileText size={14} className="text-slate-400"/><h3 className="text-sm font-semibold text-slate-700">Financial Documents</h3>
-          </div>
-          {MOCK_FIN_DOCS.map(doc => (
-            <div key={doc.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0"><FileText size={13} className="text-emerald-600"/></div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{doc.name}</p>
-                  <p className="text-[11px] text-slate-400">{doc.desc}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0"><Badge variant="green">Current</Badge><Button variant="ghost" size="sm">View</Button></div>
+        <div className="space-y-5">
+          <Card padding={false}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <FileText size={14} className="text-slate-400"/><h3 className="text-sm font-semibold text-slate-700">Financial Documents</h3>
             </div>
-          ))}
-        </Card>
+            {MOCK_FIN_DOCS.map(doc => (
+              <div key={doc.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0"><FileText size={13} className="text-emerald-600"/></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{doc.name}</p>
+                    <p className="text-[11px] text-slate-400">{doc.desc}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0"><Badge variant="green">Current</Badge><Button variant="ghost" size="sm">View</Button></div>
+              </div>
+            ))}
+          </Card>
+
+          {uploaded.length > 0 && (
+            <Card padding={false}>
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2"><Upload size={14} className="text-slate-400"/><h3 className="text-sm font-semibold text-slate-700">Uploaded Documents</h3></div>
+                <span className="text-[10px] text-slate-400">{uploaded.length} file{uploaded.length !== 1 ? 's' : ''}</span>
+              </div>
+              {uploaded.map(doc => (
+                <div key={doc.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0"><FileText size={13} className="text-slate-400"/></div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{doc.name}</p>
+                      <p className="text-[11px] text-slate-400">Uploaded {doc.uploadedAt}{doc.size ? ` · ${formatBytes(doc.size)}` : ''}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {doc.dataUrl
+                      ? <a href={doc.dataUrl} download={doc.name}><Button variant="ghost" size="sm">Download</Button></a>
+                      : <Button variant="ghost" size="sm" disabled>No preview</Button>}
+                    <button onClick={() => deleteUploaded(doc.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1"><TrashDoc size={13}/></button>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Document Picker Modal ─────────────────────────────────────────────────────
+
+export function DocPickerModal({ existingIds = [], onAdd, onClose }) {
+  const [selected, setSelected] = useState(new Set());
+  const uploaded = lsGetDocs();
+
+  const allDocs = [
+    ...MOCK_GOV_DOCS.map(d => ({ id: d.id, name: d.name, sub: `${d.version} · ${d.updated}`, category: 'Governing', dataUrl: null, size: 0, type: 'application/pdf' })),
+    ...MOCK_FIN_DOCS.map(d => ({ id: d.id, name: d.name, sub: d.desc, category: 'Financial', dataUrl: null, size: 0, type: 'application/pdf' })),
+    ...uploaded.map(d => ({ id: d.id, name: d.name, sub: `Uploaded ${d.uploadedAt}${d.size ? ' · ' + formatBytes(d.size) : ''}`, category: 'Uploaded', dataUrl: d.dataUrl, size: d.size, type: d.type })),
+  ].filter(d => !existingIds.includes(d.id));
+
+  const groups = ['Governing', 'Financial', 'Uploaded'];
+
+  const toggle = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const handleAdd = () => {
+    const docs = allDocs.filter(d => selected.has(d.id));
+    onAdd(docs.map(d => ({ id: `docref-${d.id}-${Date.now()}`, name: d.name, size: d.size, type: d.type, dataUrl: d.dataUrl })));
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col" style={{ maxHeight: '80vh' }}>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2"><FolderOpen size={15} className="text-slate-400"/><h2 className="text-sm font-semibold text-slate-900">Select from Document Library</h2></div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"><XIcon size={15}/></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {groups.map(group => {
+            const items = allDocs.filter(d => d.category === group);
+            if (!items.length) return null;
+            return (
+              <div key={group}>
+                <p className="px-6 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-50 border-b border-slate-100">{group} Documents</p>
+                {items.map(doc => (
+                  <label key={doc.id} className="flex items-center gap-3 px-6 py-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors">
+                    <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${selected.has(doc.id) ? 'bg-navy-600 border-navy-600' : 'border-slate-300'}`}
+                      onClick={() => toggle(doc.id)}>
+                      {selected.has(doc.id) && <Check size={10} className="text-white" />}
+                    </div>
+                    <div className="w-7 h-7 rounded-lg bg-navy-50 flex items-center justify-center flex-shrink-0">
+                      <FileText size={12} className="text-navy-600" />
+                    </div>
+                    <div className="min-w-0 flex-1" onClick={() => toggle(doc.id)}>
+                      <p className="text-xs font-medium text-slate-800 truncate">{doc.name}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{doc.sub}</p>
+                    </div>
+                    {doc.dataUrl && <Badge variant="green">File</Badge>}
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+          {allDocs.length === 0 && <p className="px-6 py-8 text-sm text-slate-400 text-center italic">All documents already attached</p>}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-between items-center flex-shrink-0">
+          <span className="text-xs text-slate-400">{selected.size} selected</span>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={handleAdd} disabled={selected.size === 0}>
+              <Paperclip size={11}/>Attach {selected.size > 0 ? `(${selected.size})` : ''}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -858,6 +1013,7 @@ export function Communications() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [showDocPicker, setShowDocPicker] = useState(false);
   const [extra, setExtra] = useState(() => lsGetComms());
   const fileInputRef = useRef(null);
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -980,12 +1136,23 @@ export function Communications() {
 
             {/* Attachments */}
             <div>
+              {showDocPicker && (
+                <DocPickerModal
+                  existingIds={attachments.map(a => a.sourceDocId).filter(Boolean)}
+                  onAdd={(docs) => setAttachments(prev => [...prev, ...docs])}
+                  onClose={() => setShowDocPicker(false)}
+                />
+              )}
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.zip,.txt,.csv" />
               <div className="flex items-center gap-2 flex-wrap">
                 <button type="button" onClick={() => fileInputRef.current?.click()}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-all">
                   <Paperclip size={11} />Attach files
+                </button>
+                <button type="button" onClick={() => setShowDocPicker(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-all">
+                  <FolderOpen size={11} />From Documents
                 </button>
                 {attachments.map(a => (
                   <AttachmentChip key={a.id} file={a} onRemove={removeAttachment} />
