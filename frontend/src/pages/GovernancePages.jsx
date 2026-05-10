@@ -846,12 +846,20 @@ function syncToBmp(election) {
 
 const COMMUNITY_ID = 1;
 const LS_KEY_GOV = 'hoa_elections_gov_v1';
+const LS_SELECTED_ELECTION = 'hoa_selected_election_id';
 
 export function ElectionsPage() {
   const [elections, setElections] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || SEED_ELECTIONS; } catch { return SEED_ELECTIONS; }
   });
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState(() => {
+    try {
+      const savedId = localStorage.getItem(LS_SELECTED_ELECTION);
+      if (!savedId) return null;
+      const list = JSON.parse(localStorage.getItem(LS_KEY_GOV)) || [];
+      return list.find(e => String(e.id) === savedId) || null;
+    } catch { return null; }
+  });
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
   const [residents, setResidents] = useState([]);
@@ -887,9 +895,17 @@ export function ElectionsPage() {
       if (data.length > 0) {
         setElections(data);
         localStorage.setItem(LS_KEY_GOV, JSON.stringify(data));
+        // Refresh selected with latest data from API
+        setSelected(prev => prev ? (data.find(e => e.id === prev.id) || prev) : null);
       }
     }).catch(() => {});
   }, []);
+
+  // Persist selected election ID so refresh restores the same election
+  useEffect(() => {
+    if (selected) localStorage.setItem(LS_SELECTED_ELECTION, String(selected.id));
+    else localStorage.removeItem(LS_SELECTED_ELECTION);
+  }, [selected]);
 
   useEffect(() => {
     localStorage.setItem(LS_KEY_GOV, JSON.stringify(elections));
