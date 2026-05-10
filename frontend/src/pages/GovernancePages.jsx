@@ -638,7 +638,7 @@ function ResultsEntry({ election, onUpdate }) {
   );
 }
 
-function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = [] }) {
+function ElectionDetail({ election, onUpdate, onAddCandidate, onClose, onBallots, residents = [] }) {
   const [tab, setTab] = useState('overview');
   const [showCandForm, setShowCandForm] = useState(false);
   const [candDraft, setCandDraft] = useState({ name:'', unit:'', email:'', phone:'', bio:'' });
@@ -663,7 +663,11 @@ function ElectionDetail({ election, onUpdate, onClose, onBallots, residents = []
 
   const addCandidate = () => {
     if (!candDraft.name.trim()) return;
-    onUpdate({ candidates: [...election.candidates, { ...candDraft, id: Date.now(), votes: 0, elected: false }] });
+    if (onAddCandidate) {
+      onAddCandidate(election.id, { ...candDraft });
+    } else {
+      onUpdate({ candidates: [...election.candidates, { ...candDraft, id: Date.now(), votes: 0, elected: false }] });
+    }
     setCandDraft({ name:'', unit:'', email:'', phone:'', bio:'' });
     setShowCandForm(false);
   };
@@ -821,12 +825,14 @@ function toBmpShape(form, id) {
     title: form.title, type: form.type,
     votingMethod: form.votingMethod, seatsAvailable: form.seatsAvailable,
     totalEligible: form.totalEligible, description: form.description || '',
-    stage: stageMap[form.status] || 'nominations_open',
-    quorumRequired: true, quorumPct: 25,
-    ballotsDistributed: 0, ballotsReceived: 0,
-    dates: {}, inspector: null,
-    candidates: [], ballotInstructions: form.ballotInstructions || '',
-    ballotReceiptLog: [], countingMeeting: { date:'', time:'', location:'', observers:[] },
+    stage: stageMap[form.status] || form.stage || 'nominations_open',
+    quorumRequired: form.quorumRequired ?? true, quorumPct: form.quorumPct ?? 25,
+    ballotsDistributed: form.ballotsDistributed || 0, ballotsReceived: form.ballotsReceived || 0,
+    dates: form.dates || {}, inspector: form.inspector || null,
+    candidates: form.candidates || [],
+    ballotInstructions: form.ballotInstructions || '',
+    ballotReceiptLog: form.ballotReceiptLog || [],
+    countingMeeting: form.countingMeeting || { date:'', time:'', location:'', observers:[] },
     notices: [], inspectionRequests: [],
     acclamationDeclared: false, results: null, certifiedDate: null,
     retentionStatus: 'active', destroyDate: null, auditLog: [],
@@ -847,6 +853,25 @@ function syncToBmp(election) {
 const COMMUNITY_ID = 1;
 const LS_KEY_GOV = 'hoa_elections_gov_v1';
 const LS_SELECTED_ELECTION = 'hoa_selected_election_id';
+
+// Normalize an election coming from the API (snake→camel, stage→status, etc.)
+function normalizeApiElection(e) {
+  const stageToStatus = {
+    draft: 'upcoming', nominations_open: 'upcoming', opt_in: 'upcoming',
+    voting_open: 'active', counting: 'active',
+    results_certified: 'closed', retention: 'closed',
+  };
+  return {
+    ...e,
+    status:      e.status || stageToStatus[e.stage] || 'upcoming',
+    startDate:   e.startDate || e.dates?.nominationsOpen || '',
+    endDate:     e.endDate   || e.dates?.votingDeadline  || e.dates?.nominationsClose || '',
+    votesCast:   e.votesCast  ?? e.ballotsReceived ?? 0,
+    certified:   e.certified  ?? (e.certifiedDate != null),
+    activityLog: e.activityLog ?? e.auditLog ?? [],
+    candidates:  e.candidates  || [],
+  };
+}
 
 export function ElectionsPage() {
   const [elections, setElections] = useState(() => {
@@ -891,11 +916,10 @@ export function ElectionsPage() {
 
   useEffect(() => {
     electionsAPI.list(COMMUNITY_ID).then(res => {
-      const data = res.data.map(e => ({ ...e, activityLog: e.activityLog ?? e.auditLog ?? [] }));
+      const data = (res.data || []).map(normalizeApiElection);
       if (data.length > 0) {
         setElections(data);
         localStorage.setItem(LS_KEY_GOV, JSON.stringify(data));
-        // Refresh selected with latest data from API
         setSelected(prev => prev ? (data.find(e => e.id === prev.id) || prev) : null);
       }
     }).catch(() => {});
@@ -912,14 +936,53 @@ export function ElectionsPage() {
   }, [elections]);
 
   const update = async (id, patch) => {
+    // Strip candidates from patch — they're managed separately via addCandidateToElection
+    const { candidates: _c, ...safePatch } = patch;
     setElections(p => {
-      const updated = p.map(e => e.id === id ? { ...e, ...patch } : e);
+      const updated = p.map(e => e.id === id ? { ...e, ...safePatch } : e);
       const full = updated.find(e => e.id === id);
       if (full) syncToBmp(full);
       return updated;
     });
-    setSelected(p => p?.id === id ? { ...p, ...patch } : p);
-    try { await electionsAPI.update(id, patch); } catch {}
+    setSelected(p => p?.id === id ? { ...p, ...safePatch } : p);
+    if (Object.keys(safePatch).length) {
+      try { await electionsAPI.update(id, safePatch); } catch {}
+    }
+  };
+
+  const addCandidateToElection = async (electionId, candidateData) => {
+    const tempId = Date.now();
+    const temp   = { ...candidateData, id: tempId, votes: 0, elected: false };
+
+    const applyCandidate = (list, replaceId, withObj) =>
+      list.map(e => e.id === electionId
+        ? { ...e, candidates: replaceId
+            ? e.candidates.map(c => c.id === replaceId ? withObj : c)
+            : [...e.candidates, withObj] }
+        : e);
+
+    setElections(p => {
+      const next = applyCandidate(p, null, temp);
+      const full = next.find(e => e.id === electionId);
+      if (full) syncToBmp(full);
+      return next;
+    });
+    setSelected(p => p?.id === electionId ? { ...p, candidates: [...p.candidates, temp] } : p);
+
+    try {
+      const { data: saved } = await electionsAPI.addCandidate(electionId, candidateData);
+      setElections(p => {
+        const next = applyCandidate(p, tempId, saved);
+        const full = next.find(e => e.id === electionId);
+        if (full) syncToBmp(full);
+        return next;
+      });
+      setSelected(p => p?.id === electionId
+        ? { ...p, candidates: p.candidates.map(c => c.id === tempId ? saved : c) }
+        : p);
+    } catch (err) {
+      console.error('Failed to save candidate:', err);
+    }
   };
 
   const add = async () => {
@@ -1040,7 +1103,7 @@ export function ElectionsPage() {
         )}
         {selected && (
           <div className="flex-1 overflow-hidden" style={{ height:'calc(100vh - 260px)' }}>
-            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onClose={()=>setSelected(null)} residents={residents}/>
+            <ElectionDetail election={selected} onUpdate={p=>update(selected.id,p)} onAddCandidate={addCandidateToElection} onClose={()=>setSelected(null)} residents={residents}/>
           </div>
         )}
       </Card>
