@@ -531,6 +531,7 @@ export function Documents() {
 }
 
 // ─── Communications ───────────────────────────────────────────────────────────
+import { clsx } from 'clsx';
 import { Send } from 'lucide-react';
 import { Select, Textarea } from '../components/ui';
 import { communicationsAPI } from '../lib/api';
