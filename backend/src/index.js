@@ -41,8 +41,12 @@ app.use('/api/elections',      electionsRouter);
 app.get('/health', (req, res) => res.json({ status:'ok', ts: new Date().toISOString() }));
 app.get('/api/ping', async (req, res) => {
   try {
-    await db.query('SELECT 1');
-    res.json({ db: 'ok', jwt: !!process.env.JWT_SECRET, env: process.env.NODE_ENV });
+    const { rows } = await db.query('SELECT current_database() AS db, inet_server_addr() AS host, COUNT(*) AS residents FROM residents');
+    const url = process.env.DATABASE_URL || '';
+    const maskedUrl = url.replace(/:([^:@]+)@/, ':***@');
+    res.json({ db: 'ok', jwt: !!process.env.JWT_SECRET, env: process.env.NODE_ENV,
+               database: rows[0].db, dbHost: rows[0].host,
+               residents: rows[0].residents, dbUrl: maskedUrl });
   } catch (err) {
     res.status(500).json({ db: 'error', message: err.message });
   }

@@ -1461,7 +1461,8 @@ function toDb(r) {
 }
 
 const COMMUNITY_ID = 1;
-const RESIDENTS_LS_KEY = 'hoa_residents_rich_v1';
+const RESIDENTS_LS_KEY  = 'hoa_residents_rich_v1';
+const RESIDENTS_LOCAL_KEY = 'hoa_residents_local_ids_v1'; // tracks user-added residents by id
 
 function lsGet() {
   try { return JSON.parse(localStorage.getItem(RESIDENTS_LS_KEY) || '[]'); }
@@ -1469,13 +1470,31 @@ function lsGet() {
 }
 function lsSave(list) {
   try {
-    // Only persist real residents (DB ids or locally-added with timestamp ids).
-    // Never persist SEED_RESIDENTS (ids 1-10).
-    const real = list.filter(r => r.id > 10 || r.id > 1_000_000_000);
+    // Persist every resident except the frontend-only SEED_RESIDENTS (ids 1–10).
+    const real = list.filter(r => r.id > 10);
     localStorage.setItem(RESIDENTS_LS_KEY, JSON.stringify(real));
     localStorage.setItem('hoa_residents_v1', JSON.stringify(
       real.map(r => ({ id: r.id, owner_name: r.ownerName, unit: r.unit, email: r.email || '', phone: r.phone || '' }))
     ));
+  } catch {}
+}
+
+// Track IDs that the user added in this client, so we never discard them even
+// if the API response doesn't include them yet (e.g. Railway redeploy wiped ephemeral DB).
+function lcGet() {
+  try { return JSON.parse(localStorage.getItem(RESIDENTS_LOCAL_KEY) || '{}'); }
+  catch { return {}; }
+}
+function lcMark(id, resident) {
+  try {
+    const m = lcGet(); m[id] = resident;
+    localStorage.setItem(RESIDENTS_LOCAL_KEY, JSON.stringify(m));
+  } catch {}
+}
+function lcConfirm(id) {
+  try {
+    const m = lcGet(); delete m[id];
+    localStorage.setItem(RESIDENTS_LOCAL_KEY, JSON.stringify(m));
   } catch {}
 }
 
@@ -1488,29 +1507,36 @@ export function Residents() {
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [saveError, setSaveError]       = useState('');
 
   useEffect(() => {
     residentAPI.list(COMMUNITY_ID)
       .then(({ data }) => {
         const fromApi = (data || []).map(fromDb);
+        const apiIds  = new Set(fromApi.map(r => r.id));
+
+        // Confirm any locally-added residents now visible in DB; they're safe to remove from local tracking.
+        const localMap = lcGet();
+        Object.keys(localMap).forEach(id => { if (apiIds.has(Number(id))) lcConfirm(Number(id)); });
+
+        // Locally-added residents not yet (or no longer) in the DB — keep them.
+        const stillLocal = Object.values(lcGet()).filter(r => !apiIds.has(r.id));
+
         if (fromApi.length > 0) {
-          // Merge: DB data is source of truth; also keep any local-only additions
-          // (timestamp IDs) not yet committed to DB.
-          const cached = lsGet();
-          const apiIds  = new Set(fromApi.map(r => r.id));
-          const pending = cached.filter(r => r.id > 1_000_000_000 && !apiIds.has(r.id));
-          const merged  = [...fromApi, ...pending];
+          const merged = [...fromApi, ...stillLocal];
           setResidents(merged);
           lsSave(merged);
         } else {
-          // DB empty — check localStorage for any unsaved additions; else show demo seed.
-          const cached = lsGet();
-          if (cached.length > 0) setResidents(cached);
-          // else: keep SEED_RESIDENTS as demo placeholder
+          // DB returned empty — use local-only additions, then fall back to full cache or SEED.
+          if (stillLocal.length > 0) { setResidents(stillLocal); lsSave(stillLocal); }
+          else {
+            const cached = lsGet();
+            if (cached.length > 0) setResidents(cached);
+          }
         }
       })
       .catch(() => {
-        // Network/DB error — restore from localStorage; keep SEED if nothing cached.
+        // Network error — restore from full cache; keep SEED if nothing cached.
         const cached = lsGet();
         if (cached.length > 0) setResidents(cached);
       })
@@ -1526,24 +1552,30 @@ export function Residents() {
       return next;
     });
     setSelected(prev => prev?.id === id ? merged : prev);
+    // Also update local tracking if this was a locally-added resident.
+    const localMap = lcGet();
+    if (localMap[id]) lcMark(id, merged);
     try { await residentAPI.update(id, toDb(merged)); }
     catch (err) { console.error('Resident update failed:', err); }
   };
 
   const addResident = async (data) => {
+    setSaveError('');
+    let resident;
     try {
       const { data: created } = await residentAPI.create({ ...toDb(data), communityId: COMMUNITY_ID });
-      const resident = fromDb(created);
-      setResidents(prev => { const next = [...prev, resident]; lsSave(next); return next; });
-      setShowAddModal(false);
-      setSelected(resident);
-    } catch {
-      // DB unavailable — save locally with timestamp ID so it survives refresh.
-      const fallback = { ...data, id: Date.now() };
-      setResidents(prev => { const next = [...prev, fallback]; lsSave(next); return next; });
-      setShowAddModal(false);
-      setSelected(fallback);
+      resident = fromDb(created);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Unknown error';
+      setSaveError(`Saved locally only — database error: ${msg}`);
+      // Fall back to a local-only record; assign a timestamp ID.
+      resident = { ...data, id: Date.now() };
     }
+    // Always mark as locally-created so it survives refreshes regardless of DB state.
+    lcMark(resident.id, resident);
+    setResidents(prev => { const next = [...prev, resident]; lsSave(next); return next; });
+    setShowAddModal(false);
+    setSelected(resident);
   };
 
   const filtered = useMemo(() => {
@@ -1571,6 +1603,13 @@ export function Residents() {
   return (
     <div className="page-enter">
       {showAddModal && <AddResidentModal onSave={addResident} onClose={() => setShowAddModal(false)} />}
+
+      {saveError && (
+        <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start justify-between gap-3">
+          <span>⚠️ {saveError} — the resident is saved locally and will be visible on this device.</span>
+          <button onClick={() => setSaveError('')} className="text-amber-500 hover:text-amber-700 flex-shrink-0">✕</button>
+        </div>
+      )}
 
       <SectionHeader title="Residents" subtitle="Homeowner directory with complete resident profiles"
         action={<Button variant="primary" size="sm" onClick={() => setShowAddModal(true)}><Plus size={12} />Add Resident</Button>} />
