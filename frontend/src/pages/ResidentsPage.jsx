@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { residentAPI } from '../lib/api';
+import { getCommunityId, resolveCommunityId } from '../lib/community';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
   AlertTriangle, Users, ChevronRight, Home, Shield,
@@ -1460,7 +1461,6 @@ function toDb(r) {
   };
 }
 
-const COMMUNITY_ID = 1;
 const RESIDENTS_LS_KEY  = 'hoa_residents_rich_v1';
 const RESIDENTS_LOCAL_KEY = 'hoa_residents_local_ids_v1'; // tracks user-added residents by id
 
@@ -1508,14 +1508,19 @@ export function Residents() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [saveError, setSaveError]       = useState('');
+  const [communityId, setCommunityId]   = useState(getCommunityId);
 
   useEffect(() => {
-    residentAPI.list(COMMUNITY_ID)
-      .then(({ data }) => {
+    const run = async () => {
+      const cid = await resolveCommunityId();
+      setCommunityId(cid);
+
+      try {
+        const { data } = await residentAPI.list(cid);
         const fromApi = (data || []).map(fromDb);
         const apiIds  = new Set(fromApi.map(r => r.id));
 
-        // Confirm any locally-added residents now visible in DB; they're safe to remove from local tracking.
+        // Confirm any locally-added residents now visible in DB; safe to remove from local tracking.
         const localMap = lcGet();
         Object.keys(localMap).forEach(id => { if (apiIds.has(Number(id))) lcConfirm(Number(id)); });
 
@@ -1527,20 +1532,21 @@ export function Residents() {
           setResidents(merged);
           lsSave(merged);
         } else {
-          // DB returned empty — use local-only additions, then fall back to full cache or SEED.
           if (stillLocal.length > 0) { setResidents(stillLocal); lsSave(stillLocal); }
           else {
             const cached = lsGet();
             if (cached.length > 0) setResidents(cached);
           }
         }
-      })
-      .catch(() => {
+      } catch {
         // Network error — restore from full cache; keep SEED if nothing cached.
         const cached = lsGet();
         if (cached.length > 0) setResidents(cached);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
   }, []);
 
   const updateResident = async (id, patch) => {
@@ -1563,7 +1569,7 @@ export function Residents() {
     setSaveError('');
     let resident;
     try {
-      const { data: created } = await residentAPI.create({ ...toDb(data), communityId: COMMUNITY_ID });
+      const { data: created } = await residentAPI.create({ ...toDb(data), communityId });
       resident = fromDb(created);
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Unknown error';

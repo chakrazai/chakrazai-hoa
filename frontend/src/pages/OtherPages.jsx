@@ -55,6 +55,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, AlertTriangle, X, Check } from 'lucide-react';
 import { Table, Th, Td, Tr, Tabs } from '../components/ui';
 import { violationsAPI, residentAPI as vResidentAPI } from '../lib/api';
+import { getCommunityId } from '../lib/community';
 
 const MOCK_VIOLATIONS = [
   { id:1, unit:'Unit 88',  owner:'Laura Kim',     type:'Parking',      description:'Vehicle in fire lane',                fine:75,  issuedDate:'Apr 26', status:'notice_sent'       },
@@ -71,7 +72,7 @@ const iV = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg
 const lV = 'block text-xs font-medium text-slate-500 mb-1';
 
 function useResidents() {
-  const { data } = useQuery({ queryKey:['residents-dd'], queryFn:()=>vResidentAPI.list(1).then(r=>r.data), placeholderData:[] });
+  const { data } = useQuery({ queryKey:['residents-dd'], queryFn:()=>vResidentAPI.list(getCommunityId()).then(r=>r.data), placeholderData:[] });
   return (data || []).map(r => ({ id: r.id, unit: r.unit, name: r.owner_name || r.owner || r.ownerName || '' }));
 }
 
@@ -86,7 +87,7 @@ function NewViolationModal({ onSave, onClose }) {
   const handleSave = () => {
     if (!form.residentId) { setErr('Please select a resident'); return; }
     if (!form.description.trim()) { setErr('Description is required'); return; }
-    onSave({ communityId:1, residentId: Number(form.residentId), type: form.type,
+    onSave({ communityId: getCommunityId(), residentId: Number(form.residentId), type: form.type,
               description: form.description, fine: form.fine, issuedDate: form.issuedDate,
               unit: sel?.unit || '', owner: sel?.name || '' });
   };
@@ -215,7 +216,7 @@ function NewWorkOrderModal({ onSave, onClose }) {
   const handleSave = () => {
     if (!form.location.trim()) { setErr('Location is required'); return; }
     if (!form.issue.trim()) { setErr('Issue description is required'); return; }
-    onSave({ communityId:1, location: form.location, issue: form.issue,
+    onSave({ communityId: getCommunityId(), location: form.location, issue: form.issue,
               priority: form.priority, scheduledDate: form.scheduledDate || null,
               reportedBy: form.reportedBy });
   };

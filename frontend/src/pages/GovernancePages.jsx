@@ -8,6 +8,7 @@ import {
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
 import { electionsAPI, residentAPI } from '../lib/api';
+import { getCommunityId, resolveCommunityId } from '../lib/community';
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -821,7 +822,7 @@ const BMP_LS_KEY = 'hoa_elections_v2';
 function toBmpShape(form, id) {
   const stageMap = { upcoming: 'nominations_open', active: 'voting_open', closed: 'results_certified' };
   return {
-    id, communityId: COMMUNITY_ID,
+    id, communityId: getCommunityId(),
     title: form.title, type: form.type,
     votingMethod: form.votingMethod, seatsAvailable: form.seatsAvailable,
     totalEligible: form.totalEligible, description: form.description || '',
@@ -850,7 +851,6 @@ function syncToBmp(election) {
   } catch {}
 }
 
-const COMMUNITY_ID = 1;
 const LS_KEY_GOV = 'hoa_elections_gov_v1';
 const LS_SELECTED_ELECTION = 'hoa_selected_election_id';
 
@@ -889,6 +889,7 @@ export function ElectionsPage() {
   const [form, setForm] = useState({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
   const [residents, setResidents] = useState([]);
   const [pageTab, setPageTab]     = useState('elections');
+  const [communityId, setCommunityId] = useState(getCommunityId);
 
   useEffect(() => {
     const govElections = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY_GOV)) || []; } catch { return []; } })();
@@ -903,25 +904,26 @@ export function ElectionsPage() {
   }, []);
 
   useEffect(() => {
-    const loadFromCache = () => {
-      try {
-        const cached = JSON.parse(localStorage.getItem('hoa_residents_v1') || '[]');
-        if (cached.length > 0) setResidents(cached);
-      } catch {}
-    };
-    residentAPI.list(COMMUNITY_ID)
-      .then(res => { if (res.data?.length > 0) setResidents(res.data); else loadFromCache(); })
-      .catch(loadFromCache);
-  }, []);
-
-  useEffect(() => {
-    electionsAPI.list(COMMUNITY_ID).then(res => {
-      const data = (res.data || []).map(normalizeApiElection);
-      if (data.length > 0) {
-        setElections(data);
-        localStorage.setItem(LS_KEY_GOV, JSON.stringify(data));
-        setSelected(prev => prev ? (data.find(e => e.id === prev.id) || prev) : null);
-      }
+    resolveCommunityId().then(cid => {
+      setCommunityId(cid);
+      const loadFromCache = () => {
+        try {
+          const cached = JSON.parse(localStorage.getItem('hoa_residents_v1') || '[]');
+          if (cached.length > 0) setResidents(cached);
+        } catch {}
+      };
+      residentAPI.list(cid)
+        .then(res => { if (res.data?.length > 0) setResidents(res.data); else loadFromCache(); })
+        .catch(loadFromCache);
+      electionsAPI.list(cid)
+          .then(res => {
+            const data = (res.data || []).map(normalizeApiElection);
+            if (data.length > 0) {
+              setElections(data);
+              localStorage.setItem(LS_KEY_GOV, JSON.stringify(data));
+              setSelected(prev => prev ? (data.find(e => e.id === prev.id) || prev) : null);
+            }
+          }).catch(() => {});
     }).catch(() => {});
   }, []);
 
@@ -988,14 +990,14 @@ export function ElectionsPage() {
   const add = async () => {
     if (!form.title.trim()) return;
     const tempId = Date.now();
-    const e = { ...form, id: tempId, communityId: COMMUNITY_ID, candidates: [], activityLog: [] };
+    const e = { ...form, id: tempId, communityId, candidates: [], activityLog: [] };
     syncToBmp(e);
     setElections(p => [...p, e]);
     setSelected(e);
     setShowAdd(false);
     setForm({ title:'', type:'Board', status:'upcoming', startDate:'', endDate:'', description:'', totalEligible:148, votesCast:0, seatsAvailable:3, votingMethod:'Mail-in & Online', ballotInstructions:'', certified:false, candidates:[], activityLog:[] });
     try {
-      const res = await electionsAPI.create({ ...form, communityId: COMMUNITY_ID });
+      const res = await electionsAPI.create({ ...form, communityId });
       const created = res.data;
       setElections(p => p.map(el => el.id === tempId ? { ...el, id: created.id } : el));
       setSelected(p => p?.id === tempId ? { ...p, id: created.id } : p);
