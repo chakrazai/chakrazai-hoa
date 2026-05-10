@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { residentAPI } from '../lib/api';
+import { residentAPI, communicationsAPI } from '../lib/api';
 import { getCommunityId, resolveCommunityId } from '../lib/community';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
   AlertTriangle, Users, ChevronRight, Home, Shield,
-  LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText,
+  LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send,
 } from 'lucide-react';
 import { getResidentFloor } from './BuildingPage';
 import { clsx } from 'clsx';
@@ -1300,6 +1300,97 @@ function TenantsTab({ r, onUpdate }) {
   );
 }
 
+// ─── Tab: Communications ──────────────────────────────────────────────────────
+
+function CommunicationsTab({ r }) {
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [channel, setChannel] = useState('Email + Portal');
+  const [sending, setSending] = useState(false);
+  const [localComms, setLocalComms] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('hoa_comms_v1') || '[]'); } catch { return []; }
+  });
+
+  const relevant = localComms.filter(c =>
+    !c.residentTarget || c.residentTarget === r.id ||
+    (c.sent || '').toLowerCase().includes('all homeowner')
+  );
+
+  const handleSend = async () => {
+    if (!subject.trim() || !body.trim()) return;
+    setSending(true);
+    const msg = {
+      id: Date.now(),
+      subject,
+      body,
+      type: 'announcement',
+      sent: `${r.ownerName} (${r.unit})`,
+      channel,
+      date: today,
+      openRate: null,
+      residentTarget: r.id,
+    };
+    try {
+      await communicationsAPI.send({ subject, body, channel, recipients: r.email, residentId: r.id, communityId: getCommunityId() });
+    } catch {}
+    try {
+      const list = JSON.parse(localStorage.getItem('hoa_comms_v1') || '[]');
+      list.unshift(msg);
+      localStorage.setItem('hoa_comms_v1', JSON.stringify(list.slice(0, 500)));
+    } catch {}
+    setLocalComms(prev => [msg, ...prev]);
+    setSubject('');
+    setBody('');
+    setSending(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <SectionLabel>Send Message to {r.ownerName}</SectionLabel>
+      <div className="p-3 bg-slate-50 rounded-xl space-y-2">
+        <div>
+          <label className={fLabel}>Subject</label>
+          <input value={subject} onChange={e => setSubject(e.target.value)}
+            placeholder="e.g. Dues reminder, Violation notice…" className={iCls()} />
+        </div>
+        <div>
+          <label className={fLabel}>Message</label>
+          <textarea value={body} onChange={e => setBody(e.target.value)}
+            rows={4} placeholder="Type your message…"
+            className={iCls() + ' resize-none font-mono'} />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <select value={channel} onChange={e => setChannel(e.target.value)} className={iCls() + ' flex-1'}>
+            <option>Email + Portal</option><option>Email only</option><option>Portal only</option>
+          </select>
+          <Button variant="primary" size="sm" onClick={handleSend} disabled={sending}>
+            <Send size={11} />{sending ? 'Sending…' : 'Send'}
+          </Button>
+        </div>
+      </div>
+
+      <SectionLabel>Message History</SectionLabel>
+      {relevant.length === 0 ? (
+        <p className="text-sm text-slate-400 italic">No messages sent to this resident yet</p>
+      ) : (
+        <div className="space-y-2">
+          {relevant.map(c => (
+            <div key={c.id} className="p-3 border border-slate-100 rounded-xl">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-semibold text-slate-800 truncate">{c.subject}</p>
+                <span className="text-[10px] text-slate-400 flex-shrink-0 ml-2">{c.date}</span>
+              </div>
+              <p className="text-[11px] text-slate-500">{c.channel} · {c.sent}</p>
+              {c.body && <p className="text-[11px] text-slate-400 mt-1.5 line-clamp-2 whitespace-pre-line">{c.body}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Resident Detail Panel ────────────────────────────────────────────────────
 
 function ResidentDetail({ resident, onUpdate, onClose }) {
@@ -1308,14 +1399,15 @@ function ResidentDetail({ resident, onUpdate, onClose }) {
   const initials = resident.ownerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
   const tabs = [
-    { id: 'overview',   label: 'Overview' },
-    { id: 'financials', label: 'Financials' },
-    { id: 'parking',    label: 'Parking' },
-    { id: 'access',     label: 'Access' },
-    { id: 'violations', label: 'Violations', count: resident.violations?.length || 0 },
-    { id: 'household',  label: 'Household' },
-    { id: 'tenants',    label: 'Tenants' },
-    { id: 'floormap',   label: 'Floor Map' },
+    { id: 'overview',        label: 'Overview' },
+    { id: 'financials',      label: 'Financials' },
+    { id: 'parking',         label: 'Parking' },
+    { id: 'access',          label: 'Access' },
+    { id: 'violations',      label: 'Violations', count: resident.violations?.length || 0 },
+    { id: 'household',       label: 'Household' },
+    { id: 'tenants',         label: 'Tenants' },
+    { id: 'communications',  label: 'Communications' },
+    { id: 'floormap',        label: 'Floor Map' },
   ];
 
   return (
@@ -1346,14 +1438,15 @@ function ResidentDetail({ resident, onUpdate, onClose }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-6">
-        {tab === 'overview'   && <OverviewTab   r={resident} onUpdate={onUpdate} />}
-        {tab === 'financials' && <FinancialsTab r={resident} onUpdate={onUpdate} />}
-        {tab === 'parking'    && <ParkingTab    r={resident} onUpdate={onUpdate} />}
-        {tab === 'access'     && <AccessTab     r={resident} onUpdate={onUpdate} />}
-        {tab === 'violations' && <ViolationsTab r={resident} onUpdate={onUpdate} />}
-        {tab === 'household'  && <HouseholdTab  r={resident} onUpdate={onUpdate} />}
-        {tab === 'tenants'    && <TenantsTab    r={resident} onUpdate={onUpdate} />}
-        {tab === 'floormap'   && <FloorMapTab   r={resident} />}
+        {tab === 'overview'        && <OverviewTab        r={resident} onUpdate={onUpdate} />}
+        {tab === 'financials'     && <FinancialsTab      r={resident} onUpdate={onUpdate} />}
+        {tab === 'parking'        && <ParkingTab         r={resident} onUpdate={onUpdate} />}
+        {tab === 'access'         && <AccessTab          r={resident} onUpdate={onUpdate} />}
+        {tab === 'violations'     && <ViolationsTab      r={resident} onUpdate={onUpdate} />}
+        {tab === 'household'      && <HouseholdTab       r={resident} onUpdate={onUpdate} />}
+        {tab === 'tenants'        && <TenantsTab         r={resident} onUpdate={onUpdate} />}
+        {tab === 'communications' && <CommunicationsTab  r={resident} />}
+        {tab === 'floormap'       && <FloorMapTab        r={resident} />}
       </div>
     </div>
   );

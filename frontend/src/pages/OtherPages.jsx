@@ -799,14 +799,32 @@ const commTypeMap = { financial:'blue', compliance:'amber', board:'navy', delinq
 
 const catColors = { resident:'green', violation:'red', dues:'amber', board:'navy', maintenance:'blue', vendor:'purple', general:'gray' };
 
+const COMMS_LS_KEY = 'hoa_comms_v1';
+export function lsGetComms() {
+  try { return JSON.parse(localStorage.getItem(COMMS_LS_KEY) || '[]'); } catch { return []; }
+}
+function lsSaveComm(msg) {
+  try {
+    const list = lsGetComms();
+    list.unshift(msg);
+    localStorage.setItem(COMMS_LS_KEY, JSON.stringify(list.slice(0, 500)));
+  } catch {}
+}
+
 export function Communications() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [channel, setChannel] = useState('Email + Portal');
+  const [recipients, setRecipients] = useState('All homeowners (148)');
   const [templateCat, setTemplateCat] = useState('all');
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
-  const { data: history } = useQuery({ queryKey:['comms'], queryFn:()=>communicationsAPI.history(1).then(r=>r.data), placeholderData:MOCK_COMMS });
-  const comms = history || MOCK_COMMS;
+  const [sending, setSending] = useState(false);
+  const [extra, setExtra] = useState(() => lsGetComms());
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  const { data: history } = useQuery({ queryKey:['comms'], queryFn:()=>communicationsAPI.history(getCommunityId()).then(r=>r.data), placeholderData:[] });
+  const comms = [...extra, ...(history?.length ? history : MOCK_COMMS)];
 
   const filteredTemplates = templateCat === 'all' ? EMAIL_TEMPLATES : EMAIL_TEMPLATES.filter(t => t.category === templateCat);
 
@@ -815,6 +833,32 @@ export function Communications() {
     setBody(tpl.body);
     setSelectedTemplate(tpl.id);
     setShowTemplates(false);
+  };
+
+  const handleSend = async () => {
+    if (!subject.trim() || !body.trim()) return;
+    setSending(true);
+    const tpl = selectedTemplate ? EMAIL_TEMPLATES.find(t => t.id === selectedTemplate) : null;
+    const msg = {
+      id: Date.now(),
+      subject,
+      body,
+      type: tpl?.category || 'announcement',
+      sent: recipients,
+      channel,
+      date: today,
+      openRate: null,
+      residentTarget: null,
+    };
+    try {
+      await communicationsAPI.send({ subject, body, channel, recipients, communityId: getCommunityId() });
+    } catch {}
+    lsSaveComm(msg);
+    setExtra(prev => [msg, ...prev]);
+    setSubject('');
+    setBody('');
+    setSelectedTemplate('');
+    setSending(false);
   };
 
   return (
@@ -878,13 +922,13 @@ export function Communications() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Send via</label>
-                <select className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all">
+                <select value={channel} onChange={e => setChannel(e.target.value)} className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all">
                   <option>Email + Portal</option><option>Email only</option><option>Portal only</option><option>All channels</option>
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Recipients</label>
-                <select className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all">
+                <select value={recipients} onChange={e => setRecipients(e.target.value)} className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all">
                   <option>All homeowners (148)</option><option>Delinquent accounts</option><option>Board members</option><option>Vendors</option>
                 </select>
               </div>
@@ -896,7 +940,9 @@ export function Communications() {
                   Clear
                 </button>
               )}
-              <Button variant="primary" size="sm" className="flex-1 justify-center"><Send size={12}/>Send Message</Button>
+              <Button variant="primary" size="sm" className="flex-1 justify-center" onClick={handleSend} disabled={sending}>
+                <Send size={12}/>{sending ? 'Sending…' : 'Send Message'}
+              </Button>
             </div>
           </div>
         </Card>
