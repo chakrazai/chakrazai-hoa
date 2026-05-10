@@ -244,6 +244,7 @@ ALTER TABLE residents ADD COLUMN IF NOT EXISTS garage_fobs        JSONB DEFAULT 
 ALTER TABLE residents ADD COLUMN IF NOT EXISTS garage_fob_log     JSONB DEFAULT '[]';
 ALTER TABLE residents ADD COLUMN IF NOT EXISTS common_area_fobs   JSONB DEFAULT '[]';
 ALTER TABLE residents ADD COLUMN IF NOT EXISTS common_area_fob_log JSONB DEFAULT '[]';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_residents_community_unit ON residents (community_id, unit);
 CREATE INDEX IF NOT EXISTS idx_residents_community    ON residents(community_id);
 CREATE INDEX IF NOT EXISTS idx_dues_community         ON dues_accounts(community_id);
 CREATE INDEX IF NOT EXISTS idx_violations_community   ON violations(community_id);
