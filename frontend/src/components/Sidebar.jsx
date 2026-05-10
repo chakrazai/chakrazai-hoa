@@ -3,7 +3,7 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Shield, CreditCard, BarChart2, Receipt,
   AlertTriangle, Wrench, Users, FolderOpen, MessageSquare,
-  ChevronDown, LogOut, Map, Layers, UserCheck, Vote, CalendarDays, ClipboardList,
+  ChevronDown, LogOut, Map, Layers, UserCheck, Vote, CalendarDays, ClipboardList, Building2,
 } from 'lucide-react';import { useAuthStore } from '../hooks/useStore';
 
 const navGroups = [
@@ -23,6 +23,7 @@ const navGroups = [
   ]},
   { label: 'Community', items: [
     { id: 'residents',    Icon: Users,            label: 'Residents' },
+    { id: 'amenities',    Icon: Building2,        label: 'Amenities' },
     { id: 'documents',    Icon: FolderOpen,       label: 'Documents' },
     { id: 'communications', Icon: MessageSquare,  label: 'Communications' },
     { id: 'map',          Icon: Map,              label: 'Map' },

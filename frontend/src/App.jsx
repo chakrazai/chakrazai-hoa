@@ -9,7 +9,7 @@ import { useAuthStore } from './hooks/useStore';
 // Lazy page imports
 import Dashboard from './pages/Dashboard';
 
-import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities, BuildingPage, BoardMembersPage, ElectionsPage, MeetingsPage, BallotManagementPage } from './pages/index.jsx';
+import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities, BuildingPage, BoardMembersPage, ElectionsPage, MeetingsPage, BallotManagementPage, AmenitiesPage } from './pages/index.jsx';
 import Map from './pages/Map.jsx';
 
 const queryClient = new QueryClient({
@@ -21,7 +21,7 @@ const pageTitles = {
   accounting: 'Accounting', tax: 'Tax Reports', violations: 'Violations',
   maintenance: 'Maintenance', vendors: 'Vendors', residents: 'Residents',
   documents: 'Documents', communications: 'Communications', communities: 'Communities',
-  map: 'Community Map', building: 'Building Maps',
+  amenities: 'Amenities', map: 'Community Map', building: 'Building Maps',
   boardmembers: 'Board Members', elections: 'Elections', meetings: 'Meetings',
   ballots: 'Ballot Management',
 };
@@ -47,6 +47,7 @@ function AppLayout() {
     residents:      <Residents />,
     documents:      <Documents />,
     communications: <Communications />,
+    amenities:      <AmenitiesPage />,
     communities:    <Communities onNavigate={setPage} />,
     map:            <Map />,
     building:       <BuildingPage />,
