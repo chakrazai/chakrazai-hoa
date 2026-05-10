@@ -535,6 +535,258 @@ import { Send } from 'lucide-react';
 import { Select, Textarea } from '../components/ui';
 import { communicationsAPI } from '../lib/api';
 
+const EMAIL_TEMPLATES = [
+  {
+    id: 'welcome',
+    label: 'Welcome — New Resident',
+    category: 'resident',
+    subject: 'Welcome to Oakwood Estates HOA!',
+    body: `Dear [Owner Name],
+
+Welcome to Oakwood Estates HOA! We're delighted to have you as part of our community at [Unit].
+
+Here's what you need to know as a new resident:
+
+• Monthly HOA dues of $150 are due on the 1st of each month
+• Parking spaces assigned to your unit: [Parking Space(s)]
+• Amenity access cards will be issued within 5 business days
+• Please register on the resident portal to manage your account online
+
+If you have any questions, don't hesitate to reach out to the board at board@oakwoodestates.org.
+
+We look forward to being great neighbors!
+
+Warm regards,
+Oakwood Estates HOA Board of Directors`,
+  },
+  {
+    id: 'violation_notice',
+    label: 'Violation — First Notice',
+    category: 'violation',
+    subject: 'HOA Violation Notice — [Unit]',
+    body: `Dear [Owner Name],
+
+This letter serves as formal notice that a violation of the Oakwood Estates HOA Rules and Regulations has been recorded for your unit at [Unit].
+
+Violation Details:
+• Type: [Violation Type]
+• Description: [Description]
+• Date Observed: [Date]
+• Fine Amount: $[Fine Amount]
+
+You are required to remedy this violation within 14 days of this notice. Failure to do so may result in additional fines and/or escalation to the HOA's legal counsel.
+
+To dispute this violation or request a hearing, please contact the board within 10 days.
+
+Sincerely,
+Oakwood Estates HOA Board`,
+  },
+  {
+    id: 'violation_final',
+    label: 'Violation — Final Notice',
+    category: 'violation',
+    subject: 'FINAL NOTICE — HOA Violation — [Unit]',
+    body: `Dear [Owner Name],
+
+This is a FINAL NOTICE regarding the unresolved violation at [Unit].
+
+Our records indicate that despite our previous notice dated [Previous Notice Date], the violation described below remains unresolved:
+
+• Type: [Violation Type]
+• Original Fine: $[Fine Amount]
+• Additional Late Fee: $[Late Fee]
+• Total Amount Due: $[Total Due]
+
+Immediate action is required. If this matter is not resolved within 7 days, we will refer this case to our legal counsel and pursue all available remedies under the CC&Rs, including liens against the property.
+
+Sincerely,
+Oakwood Estates HOA Board`,
+  },
+  {
+    id: 'dues_reminder',
+    label: 'Dues — Payment Reminder',
+    category: 'dues',
+    subject: 'HOA Dues Reminder — [Month] [Year]',
+    body: `Dear [Owner Name],
+
+This is a friendly reminder that your HOA dues of $150 for [Month] [Year] are due on [Due Date].
+
+Payment Options:
+• Online: Log in to the resident portal at portal.oakwoodestates.org
+• Check: Payable to "Oakwood Estates HOA" — mail to PO Box 1234, Sacramento, CA 95814
+• Auto-Pay: Enroll through the resident portal to avoid late fees
+
+A late fee of $25 will be applied to accounts not paid by the 10th of the month.
+
+If you have already submitted payment, please disregard this notice.
+
+Thank you,
+Oakwood Estates HOA Finance Committee`,
+  },
+  {
+    id: 'dues_delinquent',
+    label: 'Dues — Delinquency Notice',
+    category: 'dues',
+    subject: 'Past Due Balance Notice — [Unit]',
+    body: `Dear [Owner Name],
+
+Our records show that your account has an outstanding balance of $[Balance] as of [Date].
+
+Account Summary:
+• Unit: [Unit]
+• Unpaid Dues: $[Unpaid Dues]
+• Late Fees: $[Late Fees]
+• Total Balance Due: $[Balance]
+
+Please remit payment immediately to avoid further collection action. Accounts more than 60 days past due may be referred to our collections attorney, at which point additional legal fees will be added to the balance owed.
+
+To set up a payment plan, please contact us at finance@oakwoodestates.org within 5 business days.
+
+Sincerely,
+Oakwood Estates HOA Board`,
+  },
+  {
+    id: 'board_meeting',
+    label: 'Meeting — Board Meeting Notice',
+    category: 'board',
+    subject: 'Notice of HOA Board Meeting — [Date]',
+    body: `Dear Oakwood Estates Homeowner,
+
+You are hereby notified that the Oakwood Estates HOA Board of Directors will hold a meeting on:
+
+Date: [Date]
+Time: [Time]
+Location: [Location]
+
+Agenda:
+1. Call to order and roll call
+2. Approval of previous meeting minutes
+3. Treasurer's report
+4. Committee reports
+5. Old business
+6. New business
+7. Open forum — homeowner comments (5 minutes per speaker)
+8. Adjournment
+
+All homeowners are welcome and encouraged to attend. If you wish to add an item to the agenda, please submit your request in writing at least 72 hours before the meeting.
+
+Oakwood Estates HOA Board of Directors`,
+  },
+  {
+    id: 'annual_meeting',
+    label: 'Meeting — Annual Meeting Notice',
+    category: 'board',
+    subject: 'Annual Homeowners Meeting — [Year]',
+    body: `Dear Oakwood Estates Homeowner,
+
+The Annual Homeowners Meeting of Oakwood Estates HOA will be held:
+
+Date: [Date]
+Time: [Time]
+Location: [Location]
+
+Items on the agenda include:
+• Election of Board Members ([Seats Available] seats available)
+• Presentation of [Year] Financial Report
+• Approval of [Year+1] Budget
+• Community updates and new business
+• Open Q&A
+
+A quorum requires [Quorum Number] homeowners or valid proxies. If you are unable to attend, please complete and return the enclosed proxy form to ensure your vote is counted.
+
+Ballots and candidate bios will be distributed at the meeting.
+
+Oakwood Estates HOA Board of Directors`,
+  },
+  {
+    id: 'maintenance_notice',
+    label: 'Maintenance — Scheduled Work Notice',
+    category: 'maintenance',
+    subject: 'Scheduled Maintenance Notice — [Area]',
+    body: `Dear Oakwood Estates Resident,
+
+Please be advised that scheduled maintenance will be performed on the following:
+
+Area: [Area]
+Date(s): [Dates]
+Time: [Start Time] – [End Time]
+Work Description: [Description]
+Contractor: [Vendor Name]
+
+During this time, [access restrictions if any]. We apologize for any inconvenience this may cause.
+
+If you have questions or concerns, please contact the management office.
+
+Thank you for your patience,
+Oakwood Estates HOA Management`,
+  },
+  {
+    id: 'vendor_welcome',
+    label: 'Vendor — Welcome & Onboarding',
+    category: 'vendor',
+    subject: 'Welcome to Oakwood Estates HOA — Vendor Onboarding',
+    body: `Dear [Vendor Name],
+
+Thank you for partnering with Oakwood Estates HOA. We look forward to working with you.
+
+To complete your onboarding, please provide the following documents:
+• Certificate of Insurance (minimum $1M general liability)
+• W-9 form
+• Copy of contractor's license (if applicable)
+• References from at least two HOA or commercial clients
+
+Work Authorization:
+• All work must be scheduled through the HOA manager
+• Workers must check in at the management office upon arrival
+• Work hours: Monday–Friday 8:00 AM – 5:00 PM (weekends by prior approval only)
+• All debris and materials must be removed same day
+
+Please return signed copies of the attached service agreement within 5 business days.
+
+Oakwood Estates HOA Board of Directors`,
+  },
+  {
+    id: 'newsletter',
+    label: 'General — Community Newsletter',
+    category: 'general',
+    subject: '[Month] [Year] — Oakwood Estates Community Newsletter',
+    body: `Dear Oakwood Estates Neighbors,
+
+Here's your [Month] [Year] community update!
+
+📋 BOARD UPDATES
+[Board update content here]
+
+🔧 MAINTENANCE & IMPROVEMENTS
+[Maintenance update content here]
+
+📅 UPCOMING EVENTS
+[Events content here]
+
+💰 FINANCIAL SNAPSHOT
+[Financial summary here]
+
+🏊 AMENITY REMINDERS
+[Amenity reminder content here]
+
+As always, thank you for making Oakwood Estates a wonderful community to live in. Questions or suggestions? Email us at board@oakwoodestates.org.
+
+Warm regards,
+Oakwood Estates HOA Board of Directors`,
+  },
+];
+
+const TEMPLATE_CATEGORIES = [
+  { id: 'all',         label: 'All Templates' },
+  { id: 'resident',   label: 'Resident' },
+  { id: 'violation',  label: 'Violations' },
+  { id: 'dues',       label: 'Dues' },
+  { id: 'board',      label: 'Board' },
+  { id: 'maintenance',label: 'Maintenance' },
+  { id: 'vendor',     label: 'Vendors' },
+  { id: 'general',    label: 'General' },
+];
+
 const MOCK_COMMS = [
   { id:1, subject:'April 2026 Financial Statement', type:'financial',    sent:'All 148', channel:'Email + Portal', date:'Apr 26', openRate:91 },
   { id:2, subject:'AB 130 Fine Cap Alert',          type:'compliance',   sent:'All 148', channel:'Email + Portal', date:'Apr 20', openRate:78 },
@@ -544,19 +796,74 @@ const MOCK_COMMS = [
 ];
 const commTypeMap = { financial:'blue', compliance:'amber', board:'navy', delinquency:'red', announcement:'green' };
 
+const catColors = { resident:'green', violation:'red', dues:'amber', board:'navy', maintenance:'blue', vendor:'purple', general:'gray' };
+
 export function Communications() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [templateCat, setTemplateCat] = useState('all');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [showTemplates, setShowTemplates] = useState(false);
   const { data: history } = useQuery({ queryKey:['comms'], queryFn:()=>communicationsAPI.history(1).then(r=>r.data), placeholderData:MOCK_COMMS });
   const comms = history || MOCK_COMMS;
+
+  const filteredTemplates = templateCat === 'all' ? EMAIL_TEMPLATES : EMAIL_TEMPLATES.filter(t => t.category === templateCat);
+
+  const applyTemplate = (tpl) => {
+    setSubject(tpl.subject);
+    setBody(tpl.body);
+    setSelectedTemplate(tpl.id);
+    setShowTemplates(false);
+  };
 
   return (
     <div className="page-enter">
       <SectionHeader title="Communications" subtitle="Email, portal, SMS, and physical mail delivery" />
       <div className="grid grid-cols-2 gap-5">
         <Card>
-          <div className="flex items-center gap-2 mb-4"><Send size={14} className="text-slate-400"/><h3 className="text-sm font-semibold text-slate-700">Send Announcement</h3></div>
+          <div className="flex items-center gap-2 mb-4"><Send size={14} className="text-slate-400"/><h3 className="text-sm font-semibold text-slate-700">Compose Message</h3></div>
           <div className="space-y-3">
+
+            {/* Template selector */}
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">Email Template</label>
+              <button onClick={() => setShowTemplates(v => !v)}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-left text-slate-700 hover:border-navy-300 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all flex items-center justify-between">
+                <span className={selectedTemplate ? 'text-slate-800' : 'text-slate-400'}>
+                  {selectedTemplate ? EMAIL_TEMPLATES.find(t => t.id === selectedTemplate)?.label : 'Select a template…'}
+                </span>
+                <svg className={clsx('w-4 h-4 text-slate-400 transition-transform', showTemplates && 'rotate-180')} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+              </button>
+
+              {showTemplates && (
+                <div className="mt-1 border border-slate-200 rounded-xl shadow-lg bg-white overflow-hidden z-10 relative">
+                  {/* Category filter tabs */}
+                  <div className="flex overflow-x-auto gap-1 p-2 border-b border-slate-100 bg-slate-50">
+                    {TEMPLATE_CATEGORIES.map(c => (
+                      <button key={c.id} onClick={() => setTemplateCat(c.id)}
+                        className={clsx('px-2.5 py-1 text-[10px] font-medium rounded-lg whitespace-nowrap transition-colors flex-shrink-0',
+                          templateCat === c.id ? 'bg-navy-600 text-white' : 'text-slate-500 hover:bg-slate-200')}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Template list */}
+                  <div className="max-h-56 overflow-y-auto">
+                    {filteredTemplates.map(tpl => (
+                      <button key={tpl.id} onClick={() => applyTemplate(tpl)}
+                        className="w-full text-left px-4 py-3 hover:bg-navy-50 border-b border-slate-50 last:border-0 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={catColors[tpl.category] || 'gray'} className="flex-shrink-0 capitalize">{tpl.category}</Badge>
+                          <p className="text-xs font-medium text-slate-800 truncate">{tpl.label}</p>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5 truncate">{tpl.subject}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1.5">Subject</label>
               <input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="e.g. Board Meeting — May 15, 2026"
@@ -564,8 +871,8 @@ export function Communications() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1.5">Message</label>
-              <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Type your message to homeowners..." rows={5}
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all resize-y"/>
+              <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Type your message or select a template above…" rows={10}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all resize-y font-mono"/>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -577,13 +884,18 @@ export function Communications() {
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Recipients</label>
                 <select className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all">
-                  <option>All homeowners (148)</option><option>Delinquent accounts</option><option>Board members</option>
+                  <option>All homeowners (148)</option><option>Delinquent accounts</option><option>Board members</option><option>Vendors</option>
                 </select>
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <Button variant="secondary" size="sm">AI Draft</Button>
-              <Button variant="primary" size="sm" className="flex-1 justify-center"><Send size={12}/>Send to Homeowners</Button>
+              {selectedTemplate && (
+                <button onClick={() => { setSelectedTemplate(''); setSubject(''); setBody(''); }}
+                  className="text-xs text-slate-400 hover:text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                  Clear
+                </button>
+              )}
+              <Button variant="primary" size="sm" className="flex-1 justify-center"><Send size={12}/>Send Message</Button>
             </div>
           </div>
         </Card>
