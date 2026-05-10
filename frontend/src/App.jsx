@@ -27,12 +27,11 @@ const pageTitles = {
 };
 
 function AppLayout() {
-  const [page, setPage] = useState('dashboard');
+  const [page, setPage] = useState(() => localStorage.getItem('hoa_current_page') || 'dashboard');
   const { token, fetchMe } = useAuthStore();
 
-  useEffect(() => {
-    if (token) fetchMe();
-  }, [token]);
+  useEffect(() => { if (token) fetchMe(); }, [token]);
+  useEffect(() => { localStorage.setItem('hoa_current_page', page); }, [page]);
 
   if (!token) return <Navigate to="/login" />;
 
