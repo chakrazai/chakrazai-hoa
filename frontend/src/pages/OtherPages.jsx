@@ -532,7 +532,8 @@ export function Documents() {
 
 // ─── Communications ───────────────────────────────────────────────────────────
 import { clsx } from 'clsx';
-import { Send } from 'lucide-react';
+import { Send, Paperclip, FileText as FileIcon, X as XIcon, Image, Film, Archive } from 'lucide-react';
+import { useRef } from 'react';
 import { Select, Textarea } from '../components/ui';
 import { communicationsAPI } from '../lib/api';
 
@@ -799,6 +800,42 @@ const commTypeMap = { financial:'blue', compliance:'amber', board:'navy', delinq
 
 const catColors = { resident:'green', violation:'red', dues:'amber', board:'navy', maintenance:'blue', vendor:'purple', general:'gray' };
 
+function fileIcon(name) {
+  const ext = (name || '').split('.').pop().toLowerCase();
+  if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return <Image size={11} />;
+  if (['mp4','mov','avi','mkv'].includes(ext)) return <Film size={11} />;
+  if (['zip','rar','tar','gz'].includes(ext)) return <Archive size={11} />;
+  return <FileIcon size={11} />;
+}
+
+function formatBytes(b) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function AttachmentChip({ file, onRemove }) {
+  const content = (
+    <div className={clsx(
+      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] transition-colors',
+      file.dataUrl ? 'bg-navy-50 border-navy-100 text-navy-700 hover:bg-navy-100 cursor-pointer' : 'bg-slate-50 border-slate-200 text-slate-600',
+    )}>
+      <span className="flex-shrink-0 text-slate-400">{fileIcon(file.name)}</span>
+      <span className="font-medium truncate max-w-[140px]">{file.name}</span>
+      <span className="text-slate-400 flex-shrink-0">{formatBytes(file.size)}</span>
+      {onRemove && (
+        <button onClick={e => { e.preventDefault(); e.stopPropagation(); onRemove(file.id); }}
+          className="ml-0.5 text-slate-400 hover:text-rose-500 transition-colors flex-shrink-0">
+          <XIcon size={10} />
+        </button>
+      )}
+    </div>
+  );
+  return file.dataUrl
+    ? <a href={file.dataUrl} download={file.name}>{content}</a>
+    : content;
+}
+
 const COMMS_LS_KEY = 'hoa_comms_v1';
 export function lsGetComms() {
   try { return JSON.parse(localStorage.getItem(COMMS_LS_KEY) || '[]'); } catch { return []; }
@@ -820,7 +857,9 @@ export function Communications() {
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState([]);
   const [extra, setExtra] = useState(() => lsGetComms());
+  const fileInputRef = useRef(null);
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const { data: history } = useQuery({ queryKey:['comms'], queryFn:()=>communicationsAPI.history(getCommunityId()).then(r=>r.data), placeholderData:[] });
@@ -834,6 +873,23 @@ export function Communications() {
     setSelectedTemplate(tpl.id);
     setShowTemplates(false);
   };
+
+  const handleFiles = (e) => {
+    const MAX = 5 * 1024 * 1024; // 5MB per file, store dataUrl
+    Array.from(e.target.files || []).forEach(file => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      if (file.size <= MAX) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setAttachments(prev => [...prev, { id, name: file.name, size: file.size, type: file.type, dataUrl: ev.target.result }]);
+        reader.readAsDataURL(file);
+      } else {
+        setAttachments(prev => [...prev, { id, name: file.name, size: file.size, type: file.type, dataUrl: null }]);
+      }
+    });
+    e.target.value = '';
+  };
+
+  const removeAttachment = (id) => setAttachments(prev => prev.filter(a => a.id !== id));
 
   const handleSend = async () => {
     if (!subject.trim() || !body.trim()) return;
@@ -849,6 +905,7 @@ export function Communications() {
       date: today,
       openRate: null,
       residentTarget: null,
+      attachments: attachments.map(a => ({ id: a.id, name: a.name, size: a.size, type: a.type, dataUrl: a.dataUrl })),
     };
     try {
       await communicationsAPI.send({ subject, body, channel, recipients, communityId: getCommunityId() });
@@ -858,6 +915,7 @@ export function Communications() {
     setSubject('');
     setBody('');
     setSelectedTemplate('');
+    setAttachments([]);
     setSending(false);
   };
 
@@ -919,6 +977,22 @@ export function Communications() {
               <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Type your message or select a template above…" rows={10}
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all resize-y font-mono"/>
             </div>
+
+            {/* Attachments */}
+            <div>
+              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.zip,.txt,.csv" />
+              <div className="flex items-center gap-2 flex-wrap">
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-all">
+                  <Paperclip size={11} />Attach files
+                </button>
+                {attachments.map(a => (
+                  <AttachmentChip key={a.id} file={a} onRemove={removeAttachment} />
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Send via</label>
@@ -951,10 +1025,15 @@ export function Communications() {
           {comms.map(c => (
             <div key={c.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="mb-1.5"><Badge variant={commTypeMap[c.type]||'gray'}>{c.type}</Badge></div>
                   <p className="text-sm font-medium text-slate-800 truncate">{c.subject}</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">{c.sent} · {c.channel} · {c.date}</p>
+                  {c.attachments?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {c.attachments.map(a => <AttachmentChip key={a.id} file={a} />)}
+                    </div>
+                  )}
                 </div>
                 {c.openRate&&<div className="text-right flex-shrink-0"><p className="text-sm font-bold text-emerald-600">{c.openRate}%</p><p className="text-[10px] text-slate-400">opened</p></div>}
               </div>

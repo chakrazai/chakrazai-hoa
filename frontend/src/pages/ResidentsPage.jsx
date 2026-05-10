@@ -1,11 +1,12 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { residentAPI, communicationsAPI } from '../lib/api';
 import { getCommunityId, resolveCommunityId } from '../lib/community';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
   AlertTriangle, Users, ChevronRight, Home, Shield,
-  LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send,
+  LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send, Paperclip,
 } from 'lucide-react';
+import { AttachmentChip } from './OtherPages.jsx';
 import { getResidentFloor } from './BuildingPage';
 import { clsx } from 'clsx';
 import {
@@ -1308,6 +1309,8 @@ function CommunicationsTab({ r }) {
   const [body, setBody] = useState('');
   const [channel, setChannel] = useState('Email + Portal');
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const fileInputRef = useRef(null);
   const [localComms, setLocalComms] = useState(() => {
     try { return JSON.parse(localStorage.getItem('hoa_comms_v1') || '[]'); } catch { return []; }
   });
@@ -1316,6 +1319,21 @@ function CommunicationsTab({ r }) {
     !c.residentTarget || c.residentTarget === r.id ||
     (c.sent || '').toLowerCase().includes('all homeowner')
   );
+
+  const handleFiles = (e) => {
+    const MAX = 5 * 1024 * 1024;
+    Array.from(e.target.files || []).forEach(file => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      if (file.size <= MAX) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setAttachments(prev => [...prev, { id, name: file.name, size: file.size, type: file.type, dataUrl: ev.target.result }]);
+        reader.readAsDataURL(file);
+      } else {
+        setAttachments(prev => [...prev, { id, name: file.name, size: file.size, type: file.type, dataUrl: null }]);
+      }
+    });
+    e.target.value = '';
+  };
 
   const handleSend = async () => {
     if (!subject.trim() || !body.trim()) return;
@@ -1330,6 +1348,7 @@ function CommunicationsTab({ r }) {
       date: today,
       openRate: null,
       residentTarget: r.id,
+      attachments: attachments.map(a => ({ id: a.id, name: a.name, size: a.size, type: a.type, dataUrl: a.dataUrl })),
     };
     try {
       await communicationsAPI.send({ subject, body, channel, recipients: r.email, residentId: r.id, communityId: getCommunityId() });
@@ -1342,6 +1361,7 @@ function CommunicationsTab({ r }) {
     setLocalComms(prev => [msg, ...prev]);
     setSubject('');
     setBody('');
+    setAttachments([]);
     setSending(false);
   };
 
@@ -1359,6 +1379,19 @@ function CommunicationsTab({ r }) {
           <textarea value={body} onChange={e => setBody(e.target.value)}
             rows={4} placeholder="Type your message…"
             className={iCls() + ' resize-none font-mono'} />
+        </div>
+        <div>
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles}
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.zip,.txt,.csv" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-500 border border-slate-200 rounded-lg hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-all bg-white">
+              <Paperclip size={10} />Attach
+            </button>
+            {attachments.map(a => (
+              <AttachmentChip key={a.id} file={a} onRemove={(id) => setAttachments(prev => prev.filter(x => x.id !== id))} />
+            ))}
+          </div>
         </div>
         <div className="flex items-center justify-between gap-2">
           <select value={channel} onChange={e => setChannel(e.target.value)} className={iCls() + ' flex-1'}>
@@ -1383,6 +1416,11 @@ function CommunicationsTab({ r }) {
               </div>
               <p className="text-[11px] text-slate-500">{c.channel} · {c.sent}</p>
               {c.body && <p className="text-[11px] text-slate-400 mt-1.5 line-clamp-2 whitespace-pre-line">{c.body}</p>}
+              {c.attachments?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {c.attachments.map(a => <AttachmentChip key={a.id} file={a} />)}
+                </div>
+              )}
             </div>
           ))}
         </div>
