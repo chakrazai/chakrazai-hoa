@@ -516,7 +516,7 @@ function TimelineTab({ election }) {
   );
 }
 
-// ─── Disqualification criteria (AB 1764) ─────────────────────────────────────
+// ─── Disqualification criteria (used in EligibilityPanel for existing candidates) ─
 const DISQ_CRITERIA = [
   { id: 'delinquent',   label: 'Delinquent in assessments',                             auto: true,  autoField: 'isDelinquent'    },
   { id: 'felony',       label: 'Convicted of a felony involving dishonesty',             auto: false, autoField: null              },
@@ -525,6 +525,61 @@ const DISQ_CRITERIA = [
   { id: 'late_nom',     label: 'Nominated after the close of nominations',              auto: false, autoField: null              },
 ];
 const mkDisqChecks = () => Object.fromEntries(DISQ_CRITERIA.map(c => [c.id, false]));
+
+// ─── AB 1764 (2024) — Civil Code § 5105 nominee eligibility requirements ──────
+// Positive checklist: ALL must be confirmed before a nominee can be added.
+const AB1764_REQUIREMENTS = [
+  {
+    id: 'is_member',
+    label: 'Nominee is an owner or co-owner of a separate interest in the association',
+    sublabel: 'Civil Code § 5105(b)(1)(A)',
+    auto: true,
+    autoTrue: r => !!r.isOwnerResident,
+  },
+  {
+    id: 'not_delinquent',
+    label: 'Not delinquent in assessments exceeding $1,800 or 1% of the annual budget',
+    sublabel: 'Civil Code § 5105(b)(1)(B) — AB 1764 (2024)',
+    auto: true,
+    autoTrue: r => !r.isDelinquent,
+  },
+  {
+    id: 'no_felony',
+    label: 'Has not been convicted of theft, embezzlement, fraud, identity theft, elder/dependent adult financial abuse, or perjury against an HOA',
+    sublabel: 'Civil Code § 5105(b)(1)(C) — AB 1764 (2024)',
+    auto: false,
+    autoTrue: null,
+  },
+  {
+    id: 'no_sex_offender',
+    label: 'Is not required to register as a sex offender under Penal Code § 290',
+    sublabel: 'Civil Code § 5105(b)(1)(D) — AB 1764 (2024)',
+    auto: false,
+    autoTrue: null,
+  },
+  {
+    id: 'no_vendor',
+    label: 'Is not a vendor or contractor currently employed by or doing business with the association',
+    sublabel: 'Civil Code § 5105(b)(1)(E) — AB 1764 (2024)',
+    auto: false,
+    autoTrue: null,
+  },
+  {
+    id: 'no_court_removal',
+    label: 'Has not been removed from an HOA board by court order within the past 5 years',
+    sublabel: 'Civil Code § 5105(b)(1)(F) — AB 1764 (2024)',
+    auto: false,
+    autoTrue: null,
+  },
+  {
+    id: 'consent',
+    label: 'Nominee has provided a written, signed consent to serve if elected',
+    sublabel: 'Civil Code § 5105(a)(3)',
+    auto: false,
+    autoTrue: null,
+  },
+];
+const mkAb1764Checks = () => Object.fromEntries(AB1764_REQUIREMENTS.map(r => [r.id, false]));
 
 function ResidentCombobox({ selected, onSelect, residents }) {
   const [query, setQuery] = useState('');
@@ -612,6 +667,7 @@ function NominationsTab({ election, role, onUpdate, addAudit, residents = SAMPLE
   const [showForm,      setShowForm]      = useState(false);
   const [resident,      setResident]      = useState(null);
   const [disqChecks,    setDisqChecks]    = useState(mkDisqChecks());
+  const [ab1764Checks,  setAb1764Checks]  = useState(mkAb1764Checks());
   const [overrideReason,setOverrideReason]= useState('');
   const [showOverride,  setShowOverride]  = useState(false);
   const [expandedId,    setExpandedId]    = useState(null);
@@ -627,25 +683,37 @@ function NominationsTab({ election, role, onUpdate, addAudit, residents = SAMPLE
 
   const handleResidentSelect = r => {
     setResident(r);
-    if (r) setDisqChecks(p => ({
-      ...p,
-      delinquent:   r.isDelinquent     || false,
-      violation:    r.hasViolation     || false,
-      non_resident: !r.isOwnerResident ? true : false,
-    }));
+    if (r) {
+      setDisqChecks(p => ({
+        ...p,
+        delinquent:   r.isDelinquent     || false,
+        violation:    r.hasViolation     || false,
+        non_resident: !r.isOwnerResident ? true : false,
+      }));
+      // Auto-populate AB 1764 requirements from resident record
+      setAb1764Checks(p => ({
+        ...p,
+        is_member:    !!r.isOwnerResident,
+        not_delinquent: !r.isDelinquent,
+      }));
+    }
   };
 
-  const anyDisq    = DISQ_CRITERIA.some(c => disqChecks[c.id]);
-  const allChecked = DISQ_CRITERIA.every(c => disqChecks[c.id]);
-  const toggleAll  = () => setDisqChecks(Object.fromEntries(DISQ_CRITERIA.map(c => [c.id, !allChecked])));
+  const anyDisq      = DISQ_CRITERIA.some(c => disqChecks[c.id]);
+  const allDisqChecked = DISQ_CRITERIA.every(c => disqChecks[c.id]);
+  const toggleAll    = () => setDisqChecks(Object.fromEntries(DISQ_CRITERIA.map(c => [c.id, !allDisqChecked])));
+
+  const allAb1764Met   = AB1764_REQUIREMENTS.every(r => ab1764Checks[r.id]);
+  const ab1764Count    = AB1764_REQUIREMENTS.filter(r => ab1764Checks[r.id]).length;
 
   const resetForm = () => {
     setShowForm(false); setResident(null); setShowOverride(false);
-    setOverrideReason(''); setDisqChecks(mkDisqChecks());
+    setOverrideReason(''); setDisqChecks(mkDisqChecks()); setAb1764Checks(mkAb1764Checks());
   };
 
   const submitCandidate = () => {
     if (!resident) return;
+    if (!allAb1764Met) return;
     if (!inWindow && !overrideReason.trim()) return;
     const disqReasons = DISQ_CRITERIA.filter(c => disqChecks[c.id]).map(c => c.id);
     onUpdate({ candidates: [...election.candidates, {
@@ -656,7 +724,7 @@ function NominationsTab({ election, role, onUpdate, addAudit, residents = SAMPLE
       overrideReason: !inWindow ? overrideReason : null,
     }]});
     addAudit('Candidate Nominated',
-      `${resident.name} (Unit ${resident.unit}) nominated.${disqReasons.length ? ` Flags: ${disqReasons.join(', ')}.` : ' Eligible.'}${!inWindow ? ` Override: ${overrideReason}` : ''}`,
+      `${resident.name} (Unit ${resident.unit}) nominated. AB 1764 (2024) requirements verified.${disqReasons.length ? ` Flags: ${disqReasons.join(', ')}.` : ' Eligible.'}${!inWindow ? ` Override: ${overrideReason}` : ''}`,
       disqReasons.length ? 'amber' : 'blue'
     );
     resetForm();
@@ -765,34 +833,64 @@ function NominationsTab({ election, role, onUpdate, addAudit, residents = SAMPLE
             </div>
           )}
 
+          {/* AB 1764 (2024) Requirements — must all be confirmed to add nominee */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={fLabel + ' mb-0'}>{showLabel ? 'Disqualification Criteria (AB 1764)' : 'Eligibility Checklist'}</label>
-              <button type="button" onClick={toggleAll} className="text-[10px] text-slate-500 hover:text-slate-700 font-medium">
-                {allChecked ? 'Uncheck all' : 'Check all'}
-              </button>
+              <div>
+                <label className={fLabel + ' mb-0'}>AB 1764 (2024) — Nominee Eligibility Requirements</label>
+                <p className="text-[10px] text-slate-400 mt-0.5">Check each requirement to confirm the nominee meets it. All must be confirmed before adding. (Civil Code § 5105)</p>
+              </div>
+              <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full', allAb1764Met ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                {ab1764Count}/{AB1764_REQUIREMENTS.length}
+              </span>
             </div>
-            <div className="space-y-1.5 p-2.5 bg-white rounded-xl border border-slate-200">
-              {DISQ_CRITERIA.map(c => (
-                <label key={c.id} className={clsx('flex items-start gap-2 cursor-pointer rounded-lg px-1.5 py-1 transition-colors', disqChecks[c.id] ? 'bg-rose-50' : 'hover:bg-slate-50')}>
-                  <input type="checkbox" checked={!!disqChecks[c.id]}
-                    onChange={e => setDisqChecks(p => ({ ...p, [c.id]: e.target.checked }))}
-                    disabled={c.auto && !!resident}
-                    className="mt-0.5 flex-shrink-0"/>
-                  <div>
-                    <span className={clsx('text-xs', disqChecks[c.id] ? 'text-rose-700 font-medium' : 'text-slate-600')}>{c.label}</span>
-                    {c.auto && <span className="text-[10px] text-slate-400 ml-1.5">(auto from resident record)</span>}
-                  </div>
-                </label>
-              ))}
+            <div className="space-y-1 p-2.5 bg-white rounded-xl border border-slate-200">
+              {AB1764_REQUIREMENTS.map(req => {
+                const isAuto    = req.auto && !!resident;
+                const checked   = !!ab1764Checks[req.id];
+                const autoValue = isAuto ? req.autoTrue(resident) : null;
+                const failed    = isAuto && autoValue === false;
+                return (
+                  <label key={req.id} className={clsx(
+                    'flex items-start gap-2 rounded-lg px-1.5 py-1.5 transition-colors',
+                    failed   ? 'bg-rose-50 cursor-not-allowed' :
+                    checked  ? 'bg-emerald-50 cursor-pointer' :
+                               'hover:bg-slate-50 cursor-pointer'
+                  )}>
+                    <input type="checkbox"
+                      checked={checked}
+                      onChange={e => !failed && setAb1764Checks(p => ({ ...p, [req.id]: e.target.checked }))}
+                      disabled={failed}
+                      className="mt-0.5 flex-shrink-0 accent-emerald-600"/>
+                    <div className="min-w-0">
+                      <span className={clsx('text-xs block leading-tight', failed ? 'text-rose-700 font-medium' : checked ? 'text-emerald-800 font-medium' : 'text-slate-700')}>
+                        {req.label}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {req.sublabel}
+                        {isAuto && <span className="ml-1 italic">{autoValue ? '— confirmed from resident record' : '— not met per resident record'}</span>}
+                      </span>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
-            {anyDisq && <p className="text-xs text-rose-600 mt-1.5 flex items-center gap-1"><AlertTriangle size={11}/>Candidate will be marked disqualified</p>}
+            {!allAb1764Met && resident && (
+              <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                <AlertTriangle size={11}/>Confirm all {AB1764_REQUIREMENTS.length} requirements to enable adding this nominee
+              </p>
+            )}
+            {allAb1764Met && (
+              <p className="text-xs text-emerald-700 mt-1.5 flex items-center gap-1">
+                <Check size={11}/>All AB 1764 (2024) requirements confirmed — nominee may be added
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2">
             <Button variant="primary" size="sm" onClick={submitCandidate}
-              disabled={!resident || (showOverride && !overrideReason.trim())}>
-              <Check size={11}/>Add Candidate
+              disabled={!resident || !allAb1764Met || (showOverride && !overrideReason.trim())}>
+              <Check size={11}/>Add Nominee
             </Button>
           </div>
         </div>
