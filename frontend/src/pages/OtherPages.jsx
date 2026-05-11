@@ -332,220 +332,415 @@ export function Maintenance() {
 // ─── Vendors ──────────────────────────────────────────────────────────────────
 import { vendorAPI } from '../lib/api';
 
-function VendorCommsModal({ vendor, onClose }) {
-  const [activeTab, setActiveTab] = useState('details');
+function VendorDetailPage({ vendor, onBack }) {
+  const inp = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
+  const lbl = 'block text-xs font-medium text-slate-500 mb-1';
+
+  const [activeTab, setActiveTab]       = useState('overview');
+  const [contracts, setContracts]       = useState(() => (MOCK_CONTRACTS[vendor.id] || []).map(c => ({ ...c, docs: [] })));
+  const [vendorDocs, setVendorDocs]     = useState([]);
+  const [renewingId, setRenewingId]     = useState(null);
+  const [renewForm, setRenewForm]       = useState({ newEnd: '', autoRenew: false, notes: '' });
+  const [showAddContract, setShowAddContract] = useState(false);
+  const [addForm, setAddForm]           = useState({ type: '', start: '', end: '', value: '', scope: '', autoRenew: false });
+  const [addFormDoc, setAddFormDoc]     = useState(null);
+  const [movingFile, setMovingFile]     = useState(null);
+  const [moveTarget, setMoveTarget]     = useState('');
   const [composeSubject, setComposeSubject] = useState('');
-  const [composeBody, setComposeBody] = useState('');
-  const [composeSent, setComposeSent] = useState(false);
-  const [renewingId, setRenewingId] = useState(null);
-  const [renewForm, setRenewForm] = useState({ newEnd: '', autoRenew: false, notes: '' });
-  const [contracts, setContracts] = useState(() => MOCK_CONTRACTS[vendor.id] || []);
-  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const [composeBody, setComposeBody]   = useState('');
+  const [composeSent, setComposeSent]   = useState(false);
+  const uploadRef  = useRef(null);
+  const addDocRef  = useRef(null);
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const vendorEmails = MOCK_INBOX.filter(e => e.fromType === 'vendor' && e.from === vendor.name);
 
-  const handleRenew = (c) => {
-    setRenewingId(c.id);
-    setRenewForm({ newEnd: '', autoRenew: c.autoRenew, notes: '' });
-  };
-  const confirmRenew = (c) => {
+  const handleRenew = c => { setRenewingId(c.id); setRenewForm({ newEnd: '', autoRenew: c.autoRenew, notes: '' }); };
+  const confirmRenew = c => {
     if (!renewForm.newEnd) return;
     setContracts(prev => prev.map(x => x.id === c.id
-      ? { ...x, start: today, end: new Date(renewForm.newEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), status:'active', autoRenew: renewForm.autoRenew }
+      ? { ...x, start: today, end: new Date(renewForm.newEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), status: 'active', autoRenew: renewForm.autoRenew }
       : x));
     setRenewingId(null);
   };
 
-  const handleComposeSend = () => {
-    if (!composeSubject.trim() || !composeBody.trim()) return;
-    const msg = {
-      id: Date.now(),
-      subject: composeSubject,
-      body: composeBody,
-      type: 'vendor',
-      sent: vendor.name,
-      channel: 'Email',
-      date: today,
-      openRate: null,
+  const handleAddContract = () => {
+    if (!addForm.type.trim()) return;
+    const nc = {
+      id: `c-${Date.now()}`,
+      type: addForm.type,
+      start: addForm.start ? new Date(addForm.start).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : today,
+      end:   addForm.end   ? new Date(addForm.end).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})   : 'Ongoing',
+      value: parseFloat(addForm.value) || 0,
+      scope: addForm.scope,
+      autoRenew: addForm.autoRenew,
+      status: 'active',
+      docs: addFormDoc ? [{ id: Date.now(), name: addFormDoc.name, size: addFormDoc.size, dataUrl: addFormDoc.dataUrl, uploadedAt: today }] : [],
     };
-    lsSaveComm(msg);
-    setComposeSent(true);
-    setComposeSubject('');
-    setComposeBody('');
+    setContracts(prev => [...prev, nc]);
+    setAddForm({ type: '', start: '', end: '', value: '', scope: '', autoRenew: false });
+    setAddFormDoc(null);
+    setShowAddContract(false);
   };
 
+  const handleUploadDoc = e => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setVendorDocs(prev => [...prev, { id: Date.now(), name: file.name, size: file.size, dataUrl: ev.target.result, uploadedAt: today }]);
+    reader.readAsDataURL(file); e.target.value = '';
+  };
+
+  const confirmMoveToContract = () => {
+    if (!moveTarget || !movingFile) return;
+    const doc = { id: Date.now(), name: movingFile.name, uploadedAt: today, source: movingFile.source, dataUrl: movingFile.dataUrl || null };
+    if (moveTarget === 'standalone') {
+      setVendorDocs(prev => [...prev, doc]);
+    } else {
+      setContracts(prev => prev.map(c => c.id === moveTarget ? { ...c, docs: [...(c.docs || []), doc] } : c));
+    }
+    setMovingFile(null); setMoveTarget('');
+  };
+
+  const handleComposeSend = () => {
+    if (!composeSubject.trim() || !composeBody.trim()) return;
+    lsSaveComm({ id: Date.now(), subject: composeSubject, body: composeBody, type: 'vendor', sent: vendor.name, channel: 'Email', date: today, openRate: null });
+    setComposeSent(true); setComposeSubject(''); setComposeBody('');
+  };
+
+  const StatCard = ({ label, value }) => (
+    <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
+      <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-1">{label}</p>
+      <p className="text-sm font-semibold text-slate-800">{value}</p>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">{vendor.name}</h2>
-            <p className="text-xs text-slate-400 mt-0.5">{vendor.category}</p>
+    <div className="page-enter">
+      {/* Back + header */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-navy-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0">
+          ← Back to Vendors
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl font-bold text-slate-900">{vendor.name}</h1>
+            <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">{vendor.category}</span>
+            <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold', vendor.coiStatus==='valid' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700')}>
+              COI {vendor.coiStatus === 'valid' ? 'Valid' : `Expiring${vendor.coiExp ? ` ${vendor.coiExp}` : ''}`}
+            </span>
+            {vendor.w9 && <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700">W-9 on File</span>}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><XIcon size={16}/></button>
+          <p className="text-xs text-slate-400 mt-1 truncate">
+            {[vendor.address, vendor.phone, vendor.email].filter(Boolean).join(' · ')}
+          </p>
         </div>
-        {/* Tabs */}
-        <div className="flex gap-1 px-6 pt-3 pb-0 border-b border-slate-100">
-          {[['details','Details'],['contracts','Contracts'],['communications','Communications']].map(([id,label]) => (
-            <button key={id} onClick={() => setActiveTab(id)}
-              className={clsx('px-3 py-1.5 text-xs font-medium rounded-t-lg transition-colors',
-                activeTab === id ? 'bg-navy-600 text-white' : 'text-slate-500 hover:bg-slate-100')}>
-              {label}
-            </button>
-          ))}
+        <div className="text-right flex-shrink-0">
+          <p className="text-xl font-bold text-slate-900">${(vendor.annualSpend||0).toLocaleString()}</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide">Annual Spend</p>
         </div>
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === 'details' && (
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label:'Category',         value: vendor.category },
-                  { label:'Annual Spend',     value: `$${(vendor.annualSpend || 0).toLocaleString()}` },
-                  { label:'COI Status',       value: vendor.coiStatus === 'valid' ? 'Valid' : `Expiring${vendor.coiExp ? ` — ${vendor.coiExp}` : ''}` },
-                  { label:'W-9 on File',      value: vendor.w9 ? 'Yes' : 'No' },
-                  { label:'Contract Expiry',  value: vendor.contractExp },
-                  { label:'Business License', value: vendor.businessLicense || '—' },
-                  { label:'Tax ID / EIN',     value: vendor.ein || '—' },
-                  { label:'Primary Contact',  value: vendor.contactName ? `${vendor.contactName}${vendor.contactTitle ? ` — ${vendor.contactTitle}` : ''}` : '—' },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-slate-50 rounded-xl p-3">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-0.5">{label}</p>
-                    <p className="text-sm font-semibold text-slate-800">{value}</p>
-                  </div>
-                ))}
-                {vendor.address && (
-                  <div className="col-span-2 bg-slate-50 rounded-xl p-3">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-0.5">Address</p>
-                    <p className="text-sm font-semibold text-slate-800">{vendor.address}</p>
-                  </div>
-                )}
-                {(vendor.phone || vendor.email) && (
-                  <div className="col-span-2 bg-slate-50 rounded-xl p-3">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-1">Contact</p>
-                    <div className="flex gap-4 flex-wrap">
-                      {vendor.phone && <p className="text-sm font-semibold text-slate-800">{vendor.phone}</p>}
-                      {vendor.email && <p className="text-sm font-semibold text-navy-700">{vendor.email}</p>}
-                      {vendor.website && <p className="text-sm text-slate-500">{vendor.website}</p>}
-                    </div>
-                  </div>
-                )}
-                {vendor.notes && (
-                  <div className="col-span-2 bg-amber-50 border border-amber-100 rounded-xl p-3">
-                    <p className="text-[10px] text-amber-500 uppercase tracking-wide font-medium mb-0.5">Notes</p>
-                    <p className="text-xs text-slate-700">{vendor.notes}</p>
-                  </div>
-                )}
+      </div>
+
+      {/* Tabs — underline style */}
+      <div className="flex border-b border-slate-200 mb-6">
+        {[['overview','Overview'],['contracts','Contracts'],['communications','Communications']].map(([id, label]) => (
+          <button key={id} onClick={() => setActiveTab(id)}
+            className={clsx('px-6 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px',
+              activeTab === id ? 'border-navy-600 text-navy-700' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300')}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Overview ── */}
+      {activeTab === 'overview' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-4 gap-4">
+            <StatCard label="Category"         value={vendor.category} />
+            <StatCard label="Annual Spend"     value={`$${(vendor.annualSpend||0).toLocaleString()}`} />
+            <StatCard label="Contract Expiry"  value={vendor.contractExp} />
+            <StatCard label="W-9 on File"      value={vendor.w9 ? 'Yes' : 'No'} />
+            <StatCard label="COI Status"       value={vendor.coiStatus==='valid' ? 'Valid' : `Expiring${vendor.coiExp ? ` — ${vendor.coiExp}` : ''}`} />
+            <StatCard label="Business License" value={vendor.businessLicense || '—'} />
+            <StatCard label="Tax ID / EIN"     value={vendor.ein || '—'} />
+            <StatCard label="Primary Contact"  value={vendor.contactName ? `${vendor.contactName}${vendor.contactTitle ? ` · ${vendor.contactTitle}` : ''}` : '—'} />
+          </div>
+          {vendor.address && (
+            <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Address</p>
+              <p className="text-sm font-semibold text-slate-800">{vendor.address}</p>
+            </div>
+          )}
+          {(vendor.phone || vendor.email || vendor.website) && (
+            <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-2">Contact</p>
+              <div className="flex gap-8 flex-wrap">
+                {vendor.phone   && <div><p className="text-[10px] text-slate-400 mb-0.5">Phone</p>  <p className="text-sm font-semibold text-slate-800">{vendor.phone}</p></div>}
+                {vendor.email   && <div><p className="text-[10px] text-slate-400 mb-0.5">Email</p>  <p className="text-sm font-semibold text-navy-700">{vendor.email}</p></div>}
+                {vendor.website && <div><p className="text-[10px] text-slate-400 mb-0.5">Website</p><p className="text-sm text-slate-500">{vendor.website}</p></div>}
               </div>
             </div>
           )}
-          {activeTab === 'contracts' && (
-            <div className="p-6 space-y-3">
-              {contracts.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8">No contracts on file for this vendor.</p>
-              ) : contracts.map(c => {
-                const isExpiring = c.status === 'expiring';
-                const isActive   = c.status === 'active';
-                const isRenewing = renewingId === c.id;
-                return (
-                  <div key={c.id} className={clsx('rounded-xl border p-4 space-y-3', isExpiring ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-white')}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold',
-                            isExpiring ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
-                            {isExpiring ? 'Expiring' : 'Active'}
-                          </span>
-                          {c.autoRenew && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">Auto-Renew</span>}
-                        </div>
-                        <p className="text-sm font-semibold text-slate-800">{c.type}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{c.start} → {c.end} · ${c.value.toLocaleString()}/yr</p>
-                        <p className="text-[11px] text-slate-500 mt-1">{c.scope}</p>
-                      </div>
-                      {!isRenewing && (isExpiring || isActive) && (
-                        <button onClick={() => handleRenew(c)}
-                          className={clsx('flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
-                            isExpiring ? 'bg-amber-600 text-white hover:bg-amber-700' : 'border border-slate-200 text-slate-600 hover:bg-slate-100')}>
-                          {isExpiring ? 'Renew Now' : 'Renew'}
-                        </button>
-                      )}
-                    </div>
-                    {isRenewing && (
-                      <div className="border-t border-slate-100 pt-3 space-y-2">
-                        <p className="text-xs font-semibold text-slate-600">Renew Contract</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[11px] text-slate-400 mb-1">New Expiry Date *</label>
-                            <input type="date" value={renewForm.newEnd} onChange={e => setRenewForm(p => ({ ...p, newEnd: e.target.value }))}
-                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400"/>
-                          </div>
-                          <div className="flex items-end gap-2">
-                            <label className="flex items-center gap-2 cursor-pointer pb-1.5">
-                              <input type="checkbox" checked={renewForm.autoRenew} onChange={e => setRenewForm(p => ({ ...p, autoRenew: e.target.checked }))} className="accent-navy-600"/>
-                              <span className="text-xs text-slate-600">Auto-renew</span>
-                            </label>
-                          </div>
-                          <div className="col-span-2">
-                            <label className="block text-[11px] text-slate-400 mb-1">Notes (optional)</label>
-                            <input value={renewForm.notes} onChange={e => setRenewForm(p => ({ ...p, notes: e.target.value }))}
-                              placeholder="Rate change, scope update…"
-                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400"/>
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2 pt-1">
-                          <button onClick={() => setRenewingId(null)} className="px-3 py-1 text-xs text-slate-400 hover:text-slate-600">Cancel</button>
-                          <button onClick={() => confirmRenew(c)} disabled={!renewForm.newEnd}
-                            className="px-4 py-1 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 disabled:opacity-40 transition-colors">
-                            Confirm Renewal
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <div className="pt-2">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-colors">
-                  <Plus size={12}/>Add Contract
+          {vendor.notes && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+              <p className="text-[10px] text-amber-500 uppercase tracking-widest font-semibold mb-1">Notes</p>
+              <p className="text-sm text-slate-700">{vendor.notes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Contracts ── */}
+      {activeTab === 'contracts' && (
+        <div className="space-y-4">
+          {/* Actions bar */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">{contracts.length} contract{contracts.length !== 1 ? 's' : ''} on file</p>
+            <div className="flex gap-2">
+              <input ref={uploadRef} type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={handleUploadDoc}/>
+              <button onClick={() => uploadRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-slate-200 text-slate-600 rounded-lg hover:border-navy-300 hover:bg-navy-50 hover:text-navy-700 transition-colors">
+                <Paperclip size={11}/>Upload Contract Doc
+              </button>
+              <button onClick={() => setShowAddContract(v => !v)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 transition-colors">
+                <Plus size={11}/>{showAddContract ? 'Cancel' : 'Add Contract'}
+              </button>
+            </div>
+          </div>
+
+          {/* Standalone uploaded docs */}
+          {vendorDocs.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-slate-600 mb-2">Uploaded Vendor Documents</p>
+              <div className="flex flex-wrap gap-2">
+                {vendorDocs.map(d => (
+                  <a key={d.id} href={d.dataUrl || undefined} download={d.name}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-navy-50 border border-navy-100 text-navy-700 rounded-lg text-[11px] hover:bg-navy-100 transition-colors">
+                    <FileText size={11}/><span className="font-medium">{d.name}</span>
+                    {d.source && <span className="text-navy-400 text-[10px]">· from email</span>}
+                    <span className="text-navy-400 text-[10px]">{d.uploadedAt}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add contract inline form */}
+          {showAddContract && (
+            <div className="bg-slate-50 border border-navy-100 rounded-xl p-5 space-y-3">
+              <p className="text-sm font-semibold text-slate-800">New Contract</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className={lbl}>Contract Type / Description *</label>
+                  <input value={addForm.type} onChange={e => setAddForm(p => ({...p, type: e.target.value}))} className={inp} placeholder="e.g. Annual Landscaping Maintenance"/>
+                </div>
+                <div>
+                  <label className={lbl}>Start Date</label>
+                  <input type="date" value={addForm.start} onChange={e => setAddForm(p => ({...p, start: e.target.value}))} className={inp}/>
+                </div>
+                <div>
+                  <label className={lbl}>Expiry Date</label>
+                  <input type="date" value={addForm.end} onChange={e => setAddForm(p => ({...p, end: e.target.value}))} className={inp}/>
+                </div>
+                <div>
+                  <label className={lbl}>Annual Value ($)</label>
+                  <input type="number" min="0" value={addForm.value} onChange={e => setAddForm(p => ({...p, value: e.target.value}))} className={inp} placeholder="0.00"/>
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={addForm.autoRenew} onChange={e => setAddForm(p => ({...p, autoRenew: e.target.checked}))} className="accent-navy-600"/>
+                    <span className="text-sm text-slate-700">Auto-renew</span>
+                  </label>
+                </div>
+                <div className="col-span-2">
+                  <label className={lbl}>Scope of Work</label>
+                  <textarea value={addForm.scope} onChange={e => setAddForm(p => ({...p, scope: e.target.value}))} rows={2} className={inp + ' resize-none'} placeholder="Describe services covered…"/>
+                </div>
+                <div className="col-span-2">
+                  <input ref={addDocRef} type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={e => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = ev => setAddFormDoc({ name: file.name, size: file.size, dataUrl: ev.target.result });
+                    reader.readAsDataURL(file); e.target.value = '';
+                  }}/>
+                  <button type="button" onClick={() => addDocRef.current?.click()}
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-slate-600 border border-slate-200 rounded-lg hover:border-navy-300 hover:bg-navy-50 transition-colors">
+                    <Paperclip size={11}/>{addFormDoc ? addFormDoc.name : 'Attach Contract Document (PDF)'}
+                  </button>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => { setShowAddContract(false); setAddForm({type:'',start:'',end:'',value:'',scope:'',autoRenew:false}); setAddFormDoc(null); }}
+                  className="px-4 py-1.5 text-xs text-slate-500 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
+                <button onClick={handleAddContract} disabled={!addForm.type.trim()}
+                  className="px-5 py-1.5 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 disabled:opacity-40 transition-colors">
+                  Save Contract
                 </button>
               </div>
             </div>
           )}
-          {activeTab === 'communications' && (
-            <div>
-              {vendorEmails.length === 0 ? (
-                <div className="px-6 py-8 text-center text-sm text-slate-400">No communications on file for this vendor.</div>
-              ) : (
-                vendorEmails.map(e => (
-                  <InboxEmailRow key={e.id} email={e} onReplyAdded={() => {}} />
-                ))
-              )}
-              {/* Compose section */}
-              <div className="px-6 py-5 border-t border-slate-100">
-                <p className="text-xs font-semibold text-slate-600 mb-3">Send to Vendor</p>
-                <div className="space-y-2">
-                  <input value={composeSubject} onChange={e => setComposeSubject(e.target.value)}
-                    placeholder="Subject…"
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all"/>
-                  <textarea value={composeBody} onChange={e => setComposeBody(e.target.value)}
-                    placeholder="Message…" rows={5}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all resize-y font-mono"/>
-                  <div className="flex items-center justify-between">
-                    {composeSent && <span className="text-xs text-emerald-600 font-medium">Sent ✓</span>}
-                    <div className="ml-auto">
-                      <button onClick={handleComposeSend} disabled={!composeSubject.trim() || !composeBody.trim()}
-                        className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 transition-colors disabled:opacity-40">
-                        <Send size={11}/>Send to Vendor
+
+          {/* Contract list */}
+          {contracts.length === 0 && !showAddContract && (
+            <div className="text-center py-16 text-sm text-slate-400">No contracts on file. Click "Add Contract" to get started.</div>
+          )}
+          {contracts.map(c => {
+            const isExpiring = c.status === 'expiring';
+            const isRenewing = renewingId === c.id;
+            return (
+              <div key={c.id} className={clsx('bg-white rounded-xl border p-5 space-y-3', isExpiring ? 'border-amber-200' : 'border-slate-200')}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold', isExpiring ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
+                        {isExpiring ? 'Expiring' : 'Active'}
+                      </span>
+                      {c.autoRenew && <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">Auto-Renew</span>}
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">{c.type}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{c.start} → {c.end} · <span className="font-semibold text-slate-700">${c.value.toLocaleString()}/yr</span></p>
+                    {c.scope && <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{c.scope}</p>}
+                    {/* Attached docs */}
+                    {c.docs?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {c.docs.map((d, i) => (
+                          <a key={i} href={d.dataUrl || undefined} download={d.name}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 bg-navy-50 border border-navy-100 text-navy-700 rounded-lg text-[11px] hover:bg-navy-100 transition-colors">
+                            <FileText size={10}/><span className="font-medium">{d.name}</span>
+                            {d.source && <span className="text-navy-400 text-[10px]">· from email</span>}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {!isRenewing && (
+                    <button onClick={() => handleRenew(c)}
+                      className={clsx('flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
+                        isExpiring ? 'bg-amber-600 text-white hover:bg-amber-700' : 'border border-slate-200 text-slate-600 hover:bg-slate-100')}>
+                      {isExpiring ? 'Renew Now' : 'Renew'}
+                    </button>
+                  )}
+                </div>
+                {isRenewing && (
+                  <div className="border-t border-slate-100 pt-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">Renew Contract</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">New Expiry Date *</label>
+                        <input type="date" value={renewForm.newEnd} onChange={e => setRenewForm(p => ({...p, newEnd: e.target.value}))}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400"/>
+                      </div>
+                      <div className="flex items-end pb-1.5">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={renewForm.autoRenew} onChange={e => setRenewForm(p => ({...p, autoRenew: e.target.checked}))} className="accent-navy-600"/>
+                          <span className="text-xs text-slate-600">Auto-renew</span>
+                        </label>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[11px] text-slate-400 mb-1">Notes (optional)</label>
+                        <input value={renewForm.notes} onChange={e => setRenewForm(p => ({...p, notes: e.target.value}))}
+                          placeholder="Rate change, scope update…"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400"/>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button onClick={() => setRenewingId(null)} className="px-3 py-1 text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+                      <button onClick={() => confirmRenew(c)} disabled={!renewForm.newEnd}
+                        className="px-4 py-1 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 disabled:opacity-40 transition-colors">
+                        Confirm Renewal
                       </button>
                     </div>
                   </div>
-                </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Communications ── */}
+      {activeTab === 'communications' && (
+        <div className="grid grid-cols-2 gap-6">
+          {/* Inbox from vendor */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-700">Received from {vendor.name}</h3>
+            {vendorEmails.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400">No emails on file.</div>
+            ) : vendorEmails.map(email => (
+              <div key={email.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                <InboxEmailRow email={email} onReplyAdded={() => {}} />
+                {/* Move invoice attachment to contracts */}
+                {email.hasInvoice && (
+                  <div className="px-5 pb-3 pt-2 border-t border-slate-50 flex items-center gap-2 flex-wrap">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg text-[11px]">
+                      <FileText size={10}/>Invoice #{email.invoiceNumber}.pdf
+                    </div>
+                    <button onClick={() => { setMovingFile({ name: `Invoice_${email.invoiceNumber}.pdf`, source: email.subject }); setActiveTab('communications'); }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-navy-700 border border-navy-200 rounded-lg hover:bg-navy-50 transition-colors">
+                      → Move to Contracts
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {/* Compose */}
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Send to {vendor.name}</h3>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+              <div>
+                <label className={lbl}>Subject</label>
+                <input value={composeSubject} onChange={e => setComposeSubject(e.target.value)} className={inp} placeholder="Subject…"/>
+              </div>
+              <div>
+                <label className={lbl}>Message</label>
+                <textarea value={composeBody} onChange={e => setComposeBody(e.target.value)} rows={9} className={inp + ' resize-y font-mono'} placeholder="Message…"/>
+              </div>
+              <div className="flex items-center justify-between">
+                {composeSent && <span className="text-xs text-emerald-600 font-medium">Sent ✓</span>}
+                <button onClick={handleComposeSend} disabled={!composeSubject.trim() || !composeBody.trim()}
+                  className="ml-auto inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 disabled:opacity-40 transition-colors">
+                  <Send size={11}/>Send to Vendor
+                </button>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Move-to-Contracts picker overlay */}
+      {movingFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-sm font-bold text-slate-900 mb-1">Move Attachment to Contracts</h3>
+            <p className="text-xs text-slate-400 mb-4">Choose where to file <span className="font-semibold text-slate-700">{movingFile.name}</span></p>
+            <div className="space-y-1.5 max-h-56 overflow-y-auto mb-4">
+              <label className="flex items-center gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+                <input type="radio" name="mt" value="standalone" checked={moveTarget==='standalone'} onChange={() => setMoveTarget('standalone')} className="accent-navy-600"/>
+                <span className="text-sm text-slate-700">Save as standalone vendor document</span>
+              </label>
+              {contracts.map(c => (
+                <label key={c.id} className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+                  <input type="radio" name="mt" value={c.id} checked={moveTarget===c.id} onChange={() => setMoveTarget(c.id)} className="accent-navy-600 mt-0.5 flex-shrink-0"/>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{c.type}</p>
+                    <p className="text-[11px] text-slate-400">{c.start} → {c.end}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setMovingFile(null); setMoveTarget(''); }}
+                className="px-4 py-2 text-xs text-slate-500 rounded-lg hover:bg-slate-100 transition-colors">Cancel</button>
+              <button onClick={confirmMoveToContract} disabled={!moveTarget}
+                className="px-4 py-2 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 disabled:opacity-40 transition-colors">
+                Move Here
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -780,6 +975,10 @@ export function Vendors() {
     setExtra(prev => [v, ...prev]);
   };
 
+  if (selectedVendor) {
+    return <VendorDetailPage vendor={selectedVendor} onBack={() => setSelectedVendor(null)} />;
+  }
+
   return (
     <div className="page-enter">
       <SectionHeader title="Vendors" subtitle="Contract management, COI tracking, and 1099 compliance"
@@ -798,7 +997,12 @@ export function Vendors() {
             <thead><tr><Th>Vendor</Th><Th>Category</Th><Th>Contract Exp.</Th><Th>COI</Th><Th>W-9</Th><Th>Annual Spend</Th><Th>Action</Th></tr></thead>
             <tbody>{vendors.map(v => (
               <Tr key={v.id}>
-                <Td><span className="font-semibold text-slate-800">{v.name}</span></Td>
+                <Td>
+                  <button onClick={() => setSelectedVendor(v)}
+                    className="font-semibold text-navy-700 hover:text-navy-900 hover:underline underline-offset-2 transition-colors text-left">
+                    {v.name}
+                  </button>
+                </Td>
                 <Td><Badge variant="gray">{v.category}</Badge></Td>
                 <Td className="text-xs text-slate-500">{v.contractExp}</Td>
                 <Td>
@@ -807,14 +1011,16 @@ export function Vendors() {
                 </Td>
                 <Td><Badge variant={v.w9?'green':'red'}>{v.w9?'On file':'Missing'}</Badge></Td>
                 <Td className="font-semibold">${(v.annualSpend/1000).toFixed(1)}K</Td>
-                <Td><div className="flex gap-1.5"><Button variant="ghost" size="sm" onClick={() => setSelectedVendor(v)}>View</Button>{v.coiStatus==='expiring'&&<Button variant="danger" size="sm">Renew COI</Button>}</div></Td>
+                <Td><div className="flex gap-1.5">
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedVendor(v)}>View</Button>
+                  {v.coiStatus==='expiring'&&<Button variant="danger" size="sm">Renew COI</Button>}
+                </div></Td>
               </Tr>
             ))}</tbody>
           </Table>
         </div>
       </Card>
       {showAdd && <AddVendorModal onClose={() => setShowAdd(false)} onSave={handleAddVendor} />}
-      {selectedVendor && <VendorCommsModal vendor={selectedVendor} onClose={() => setSelectedVendor(null)} />}
     </div>
   );
 }
