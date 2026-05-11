@@ -552,12 +552,23 @@ export default function FinancialsPage() {
   };
 
   const handlePaymentAdded = (invId, newPayments) => {
-    // Update localStorage for user-added invoices
-    const idx = extra.findIndex(i => i.id === invId);
-    if (idx >= 0) {
+    // Always persist to localStorage regardless of mock vs user-added
+    const lsAll = lsGet();
+    const mockInv = MOCK_INVOICES.find(i => i.id === invId);
+    const extraInv = extra.find(i => i.id === invId);
+
+    if (extraInv) {
       const next = extra.map(i => i.id === invId ? { ...i, payments: newPayments } : i);
       setExtra(next);
       lsSave(next);
+    } else if (mockInv) {
+      // Save mock invoice with payments into localStorage so vendor page can read it
+      const updated = { ...mockInv, payments: newPayments };
+      const existingIdx = lsAll.findIndex(i => i.id === invId);
+      const nextLs = existingIdx >= 0
+        ? lsAll.map(i => i.id === invId ? updated : i)
+        : [...lsAll, updated];
+      lsSave(nextLs);
     }
   };
 
