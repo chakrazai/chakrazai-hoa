@@ -331,6 +331,251 @@ export function Maintenance() {
 
 // ─── Vendors ──────────────────────────────────────────────────────────────────
 import { vendorAPI } from '../lib/api';
+import { CheckCircle, Clock, Circle, CreditCard as VCreditCard, ChevronUp, ChevronDown as ChevDown2 } from 'lucide-react';
+
+// ─── Vendor Invoice helpers (shared data with FinancialsPage via localStorage) ─
+
+const INV_LS_KEY = 'hoa_invoices_v1';
+function invLsGet() { try { return JSON.parse(localStorage.getItem(INV_LS_KEY) || '[]'); } catch { return []; } }
+function invLsSave(list) { try { localStorage.setItem(INV_LS_KEY, JSON.stringify(list.slice(0, 500))); } catch {} }
+
+const VENDOR_MOCK_INVOICES = [
+  { id:'INV-001', vendor:'Greenscape Landscaping', category:'Landscaping', invoiceNumber:'GS-2026-041', invoiceDate:'May 2, 2026', dueDate:'May 15, 2026', amount:4200, description:'April 2026 landscaping services — 4 visits, mowing, trimming, seasonal planting', status:'unpaid', doc:null, payments:[] },
+  { id:'INV-002', vendor:'AquaCare Pool Services', category:'Pool & Spa', invoiceNumber:'AQ-2026-051', invoiceDate:'May 1, 2026', dueDate:'Jun 1, 2026', amount:1800, description:'May 2026 pool & spa maintenance — 8 visits, chemical balancing', status:'unpaid', doc:null, payments:[] },
+  { id:'INV-003', vendor:'ProPlumb Emergency', category:'Plumbing', invoiceNumber:'PP-2026-0418', invoiceDate:'Apr 19, 2026', dueDate:'May 19, 2026', amount:1840, description:'Emergency main water line repair Apr 18 — labor $960, materials $580, after-hours surcharge $300', status:'paid', doc:null, payments:[{ id:'PAY-001', date:'Apr 28, 2026', amount:1840, method:'Check', ref:'#4521', note:'Full payment — check mailed Apr 27' }] },
+  { id:'INV-004', vendor:'SecureWatch Security', category:'Security', invoiceNumber:'SW-2026-MAY', invoiceDate:'May 1, 2026', dueDate:'May 15, 2026', amount:3200, description:'May 2026 security guard services + camera monitoring', status:'partial', doc:null, payments:[{ id:'PAY-002', date:'May 5, 2026', amount:1600, method:'ACH', ref:'ACH-8821', note:'First installment — 50%' }] },
+  { id:'INV-005', vendor:'Greenscape Landscaping', category:'Landscaping', invoiceNumber:'GS-2026-031', invoiceDate:'Apr 1, 2026', dueDate:'Apr 15, 2026', amount:4200, description:'March 2026 landscaping services — 4 visits', status:'paid', doc:null, payments:[{ id:'PAY-003', date:'Apr 8, 2026', amount:4200, method:'Check', ref:'#4498', note:'Full payment' }] },
+  { id:'INV-006', vendor:'PaintRight Contractors', category:'Painting & General', invoiceNumber:'PR-2026-002', invoiceDate:'Apr 15, 2026', dueDate:'May 1, 2026', amount:6000, description:'Building A exterior painting — Phase 1 deposit (50%) + Phase 2 progress payment', status:'partial', doc:null, payments:[{ id:'PAY-004', date:'Apr 20, 2026', amount:3000, method:'Check', ref:'#4510', note:'50% deposit per contract' }, { id:'PAY-005', date:'May 1, 2026', amount:2000, method:'ACH', ref:'ACH-9103', note:'Progress payment — Phase 2 milestone' }] },
+  { id:'INV-007', vendor:'AquaCare Pool Services', category:'Pool & Spa', invoiceNumber:'AQ-2026-041', invoiceDate:'Apr 1, 2026', dueDate:'May 1, 2026', amount:1800, description:'April 2026 pool & spa maintenance — partial payment pending COI resolution', status:'overdue', doc:null, payments:[{ id:'PAY-006', date:'Apr 25, 2026', amount:900, method:'ACH', ref:'ACH-8740', note:'Partial — holding balance pending COI renewal confirmation' }] },
+  { id:'INV-008', vendor:'SecureLock Inc.', category:'Locksmith & Gates', invoiceNumber:'SL-2026-Q1', invoiceDate:'Mar 31, 2026', dueDate:'Apr 15, 2026', amount:1700, description:'Q1 2026 gate PM (2 visits) + 12 new FOB programming + 1 emergency lockout', status:'paid', doc:null, payments:[{ id:'PAY-007', date:'Apr 10, 2026', amount:1700, method:'Check', ref:'#4505', note:'Full payment' }] },
+  { id:'INV-009', vendor:'Metro Collection Group', category:'Collections', invoiceNumber:'MCG-2026-Q1', invoiceDate:'Apr 1, 2026', dueDate:'Apr 30, 2026', amount:630, description:'Q1 2026 collections services — 15% contingency on $4,200 collected', status:'paid', doc:null, payments:[{ id:'PAY-008', date:'Apr 22, 2026', amount:630, method:'ACH', ref:'ACH-8801', note:'Full payment' }] },
+  { id:'INV-010', vendor:'SecureWatch Security', category:'Security', invoiceNumber:'SW-2026-APR', invoiceDate:'Apr 1, 2026', dueDate:'Apr 15, 2026', amount:3200, description:'April 2026 security guard services + camera monitoring', status:'paid', doc:null, payments:[{ id:'PAY-009', date:'Apr 12, 2026', amount:2000, method:'Check', ref:'#4502', note:'First installment' }, { id:'PAY-010', date:'Apr 20, 2026', amount:1200, method:'ACH', ref:'ACH-8720', note:'Balance — second and final installment' }] },
+];
+
+function vPaidAmt(inv) { return inv.payments.reduce((s, p) => s + p.amount, 0); }
+function vBal(inv) { return Math.max(0, inv.amount - vPaidAmt(inv)); }
+function vStatus(inv) { const p = vPaidAmt(inv); if (p >= inv.amount) return 'paid'; if (p > 0) return inv.status === 'overdue' ? 'overdue' : 'partial'; return inv.status; }
+
+const V_STATUS_META = {
+  paid:    { label: 'Paid',    color: 'green', Icon: CheckCircle },
+  partial: { label: 'Partial', color: 'blue',  Icon: Clock },
+  unpaid:  { label: 'Unpaid',  color: 'amber', Icon: Circle },
+  overdue: { label: 'Overdue', color: 'red',   Icon: AlertTriangle },
+};
+const V_PMETHODS = ['Check', 'ACH', 'Wire Transfer', 'Credit Card', 'Zelle', 'Cash'];
+const V_CATEGORIES = ['Landscaping','Pool & Spa','Plumbing','Security','Painting & General','Collections','Locksmith & Gates','Electrical','HVAC','Insurance','Utilities','Administrative','Other'];
+
+function VMethodBadge({ method }) {
+  const c = { Check:'bg-slate-100 text-slate-700', ACH:'bg-blue-50 text-blue-700', 'Wire Transfer':'bg-purple-50 text-purple-700', 'Credit Card':'bg-rose-50 text-rose-700', Zelle:'bg-violet-50 text-violet-700', Cash:'bg-green-50 text-green-700' };
+  return (
+    <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold', c[method] || 'bg-slate-100 text-slate-700')}>
+      {method === 'Check' && <FileText size={9}/>}
+      {(method === 'ACH' || method === 'Wire Transfer') && <Building2 size={9}/>}
+      {(method === 'Credit Card' || method === 'Zelle') && <VCreditCard size={9}/>}
+      {method}
+    </span>
+  );
+}
+
+function VRecordPayPanel({ invoice, onSave, onClose }) {
+  const rem = vBal(invoice);
+  const [form, setForm] = useState({ date: '', amount: String(rem), method: 'Check', ref: '', note: '' });
+  const [err, setErr] = useState('');
+  const f = k => v => setForm(p => ({ ...p, [k]: v }));
+  const iV2 = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
+  const save = () => {
+    if (!form.date) { setErr('Date required'); return; }
+    const amt = parseFloat(form.amount);
+    if (!amt || amt <= 0) { setErr('Enter a valid amount'); return; }
+    if (amt > rem + 0.01) { setErr(`Exceeds balance of ${formatCurrency(rem)}`); return; }
+    onSave({ id:`PAY-${Date.now()}`, date: new Date(form.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), amount: amt, method: form.method, ref: form.ref, note: form.note });
+  };
+  return (
+    <div className="mt-3 p-4 bg-navy-50 border border-navy-100 rounded-xl space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-navy-900">Record Payment — Balance: {formatCurrency(rem)}</p>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
+      </div>
+      {err && <p className="text-[11px] text-rose-600 font-medium">{err}</p>}
+      <div className="grid grid-cols-2 gap-2">
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">Date *</label><input type="date" value={form.date} onChange={e => f('date')(e.target.value)} className={iV2}/></div>
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => f('amount')(e.target.value)} className={iV2}/></div>
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">Method</label><select value={form.method} onChange={e => f('method')(e.target.value)} className={iV2}>{V_PMETHODS.map(m => <option key={m}>{m}</option>)}</select></div>
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">{form.method === 'Check' ? 'Check #' : 'Reference'}</label><input value={form.ref} onChange={e => f('ref')(e.target.value)} className={iV2} placeholder={form.method === 'Check' ? '#1234' : 'ACH-00123'}/></div>
+        <div className="col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Note</label><input value={form.note} onChange={e => f('note')(e.target.value)} className={iV2} placeholder="e.g. First installment, final payment…"/></div>
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <button onClick={onClose} className="px-4 py-1.5 text-xs text-slate-500 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
+        <button onClick={save} className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 transition-colors">
+          <VCreditCard size={11}/>Save Payment
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function VInvoiceRow({ invoice, onPaymentAdded }) {
+  const [expanded, setExpanded] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [payments, setPayments] = useState(invoice.payments);
+  const paid = payments.reduce((s, p) => s + p.amount, 0);
+  const bal  = Math.max(0, invoice.amount - paid);
+  const rawSt = paid >= invoice.amount ? 'paid' : paid > 0 ? 'partial' : invoice.status;
+  const meta  = V_STATUS_META[rawSt] || V_STATUS_META.unpaid;
+  const pct   = Math.min(100, invoice.amount > 0 ? Math.round(paid / invoice.amount * 100) : 0);
+  const handlePay = pay => { const next = [...payments, pay]; setPayments(next); onPaymentAdded(invoice.id, next); setRecording(false); };
+  const fakeInv = { ...invoice, payments, amount: invoice.amount };
+
+  return (
+    <div className={clsx('border-b border-slate-50 last:border-0 transition-colors', expanded && 'bg-slate-50/60')}>
+      <div className="px-5 py-3 flex items-center gap-3">
+        <button onClick={() => setExpanded(v => !v)} className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors">
+          {expanded ? <ChevronUp size={13}/> : <ChevDown2 size={13}/>}
+        </button>
+        <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0', meta.color==='green'?'bg-emerald-50':meta.color==='red'?'bg-rose-50':meta.color==='blue'?'bg-blue-50':'bg-amber-50')}>
+          <meta.Icon size={13} className={clsx(meta.color==='green'?'text-emerald-600':meta.color==='red'?'text-rose-500':meta.color==='blue'?'text-blue-600':'text-amber-500')}/>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <p className="text-xs font-semibold text-slate-800">{invoice.invoiceNumber}</p>
+            <Badge variant="gray">{invoice.category}</Badge>
+          </div>
+          <p className="text-[11px] text-slate-400">Issued {invoice.invoiceDate} · Due {invoice.dueDate}</p>
+          {invoice.description && <p className="text-[11px] text-slate-500 truncate mt-0.5">{invoice.description}</p>}
+        </div>
+        {paid > 0 && bal > 0 && (
+          <div className="w-20 flex-shrink-0">
+            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-0.5"><div className="h-full bg-blue-500 rounded-full" style={{ width:`${pct}%` }}/></div>
+            <p className="text-[10px] text-slate-400 text-right">{pct}%</p>
+          </div>
+        )}
+        <div className="text-right flex-shrink-0 min-w-[80px]">
+          <p className="text-sm font-bold text-slate-900">{formatCurrency(invoice.amount)}</p>
+          {bal > 0 && <p className="text-[11px] text-rose-600 font-semibold">Bal: {formatCurrency(bal)}</p>}
+          {bal === 0 && paid > 0 && <p className="text-[11px] text-emerald-600 font-semibold">Paid in full</p>}
+        </div>
+        <Badge variant={meta.color}>{meta.label}</Badge>
+        {bal > 0 && <Button variant="primary" size="sm" onClick={e => { e.stopPropagation(); setExpanded(true); setRecording(true); }}>+ Pay</Button>}
+        {bal === 0 && <span className="text-xs text-emerald-600 font-semibold">✓</span>}
+      </div>
+      {expanded && (
+        <div className="px-12 pb-4 space-y-3">
+          {invoice.description && <div className="text-xs text-slate-600 bg-white border border-slate-100 rounded-lg px-3 py-2">{invoice.description}</div>}
+          {payments.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Payment History</p>
+              <div className="space-y-2">
+                {payments.map((pay, i) => (
+                  <div key={pay.id} className="flex items-center gap-3 bg-white border border-slate-100 rounded-lg px-3 py-2.5">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-emerald-700">{i + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-800">{formatCurrency(pay.amount)}</span>
+                        <VMethodBadge method={pay.method}/>
+                        {pay.ref && <span className="text-[11px] text-slate-400">{pay.ref}</span>}
+                        <span className="text-[11px] text-slate-400">{pay.date}</span>
+                      </div>
+                      {pay.note && <p className="text-[11px] text-slate-500 mt-0.5">{pay.note}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between mt-2 px-3 py-2 bg-slate-50 rounded-lg">
+                <span className="text-xs text-slate-500">Total paid ({payments.length} installment{payments.length !== 1 ? 's' : ''})</span>
+                <span className="text-sm font-bold text-slate-900">{formatCurrency(paid)}</span>
+              </div>
+            </div>
+          )}
+          {recording && <VRecordPayPanel invoice={fakeInv} onSave={handlePay} onClose={() => setRecording(false)}/>}
+          {!recording && bal > 0 && (
+            <button onClick={() => setRecording(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-navy-700 border border-navy-200 rounded-lg hover:bg-navy-50 transition-colors">
+              <Plus size={11}/>Record Payment
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VendorAddInvoiceModal({ vendor, onClose, onSave }) {
+  const iV2 = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
+  const lV2 = 'block text-xs font-medium text-slate-500 mb-1';
+  const [form, setForm] = useState({ category: '', invoiceNumber: '', invoiceDate: '', dueDate: '', amount: '', description: '' });
+  const [errors, setErrors] = useState({});
+  const f = k => v => setForm(p => ({ ...p, [k]: v }));
+  const validate = () => {
+    const e = {};
+    if (!form.invoiceNumber) e.invoiceNumber = 'Required';
+    if (!form.invoiceDate)   e.invoiceDate   = 'Required';
+    if (!form.dueDate)       e.dueDate       = 'Required';
+    if (!form.amount || isNaN(parseFloat(form.amount))) e.amount = 'Required';
+    setErrors(e); return !Object.keys(e).length;
+  };
+  const save = () => {
+    if (!validate()) return;
+    onSave({ id:`INV-${Date.now()}`, vendor: vendor.name, category: form.category || 'Other',
+      invoiceNumber: form.invoiceNumber,
+      invoiceDate: new Date(form.invoiceDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+      dueDate: new Date(form.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+      amount: parseFloat(form.amount), description: form.description, status: 'unpaid', doc: null, payments: [] });
+    onClose();
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Add Invoice</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Vendor: {vendor.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"><X size={16}/></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className={lV2}>Category</label>
+              <select value={form.category} onChange={e => f('category')(e.target.value)} className={iV2}>
+                <option value="">Select…</option>
+                {V_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={lV2}>Invoice Number *</label>
+              <input value={form.invoiceNumber} onChange={e => f('invoiceNumber')(e.target.value)} className={clsx(iV2, errors.invoiceNumber && 'border-rose-300')} placeholder="e.g. INV-2026-001"/>
+              {errors.invoiceNumber && <p className="text-[11px] text-rose-500 mt-1">{errors.invoiceNumber}</p>}
+            </div>
+            <div>
+              <label className={lV2}>Amount ($) *</label>
+              <input type="number" min="0" step="0.01" value={form.amount} onChange={e => f('amount')(e.target.value)} className={clsx(iV2, errors.amount && 'border-rose-300')} placeholder="0.00"/>
+              {errors.amount && <p className="text-[11px] text-rose-500 mt-1">{errors.amount}</p>}
+            </div>
+            <div>
+              <label className={lV2}>Invoice Date *</label>
+              <input type="date" value={form.invoiceDate} onChange={e => f('invoiceDate')(e.target.value)} className={clsx(iV2, errors.invoiceDate && 'border-rose-300')}/>
+              {errors.invoiceDate && <p className="text-[11px] text-rose-500 mt-1">{errors.invoiceDate}</p>}
+            </div>
+            <div>
+              <label className={lV2}>Due Date *</label>
+              <input type="date" value={form.dueDate} onChange={e => f('dueDate')(e.target.value)} className={clsx(iV2, errors.dueDate && 'border-rose-300')}/>
+              {errors.dueDate && <p className="text-[11px] text-rose-500 mt-1">{errors.dueDate}</p>}
+            </div>
+            <div className="col-span-2">
+              <label className={lV2}>Description</label>
+              <textarea value={form.description} onChange={e => f('description')(e.target.value)} rows={3} className={iV2 + ' resize-none'} placeholder="What services does this invoice cover?"/>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex-shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-xs text-slate-500 rounded-lg hover:bg-slate-100 transition-colors">Cancel</button>
+          <button onClick={save} className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 transition-colors">
+            <Plus size={12}/>Add Invoice
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function VendorDetailPage({ vendor, onBack }) {
   const inp = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
@@ -349,6 +594,15 @@ function VendorDetailPage({ vendor, onBack }) {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody]   = useState('');
   const [composeSent, setComposeSent]   = useState(false);
+  const [vendorInvoices, setVendorInvoices] = useState(() => {
+    const lsAll = invLsGet();
+    const lsMap = {};
+    lsAll.forEach(i => { if (i.id) lsMap[i.id] = i; });
+    const mockForVendor = VENDOR_MOCK_INVOICES.filter(i => i.vendor === vendor.name).map(i => lsMap[i.id] || i);
+    const userAdded = lsAll.filter(i => i.vendor === vendor.name && !VENDOR_MOCK_INVOICES.find(m => m.id === i.id));
+    return [...userAdded, ...mockForVendor];
+  });
+  const [showAddInv, setShowAddInv] = useState(false);
   const uploadRef  = useRef(null);
   const addDocRef  = useRef(null);
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -407,6 +661,21 @@ function VendorDetailPage({ vendor, onBack }) {
     setComposeSent(true); setComposeSubject(''); setComposeBody('');
   };
 
+  const handleVendorPayment = (invId, newPayments) => {
+    const inv = vendorInvoices.find(i => i.id === invId);
+    if (!inv) return;
+    const updated = { ...inv, payments: newPayments };
+    setVendorInvoices(prev => prev.map(i => i.id === invId ? updated : i));
+    const lsAll = invLsGet();
+    const idx = lsAll.findIndex(i => i.id === invId);
+    invLsSave(idx >= 0 ? lsAll.map(i => i.id === invId ? updated : i) : [...lsAll, updated]);
+  };
+
+  const handleAddVendorInvoice = inv => {
+    setVendorInvoices(prev => [inv, ...prev]);
+    invLsSave([inv, ...invLsGet()]);
+  };
+
   const StatCard = ({ label, value }) => (
     <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
       <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-1">{label}</p>
@@ -443,7 +712,7 @@ function VendorDetailPage({ vendor, onBack }) {
 
       {/* Tabs — underline style */}
       <div className="flex border-b border-slate-200 mb-6">
-        {[['overview','Overview'],['contracts','Contracts'],['communications','Communications']].map(([id, label]) => (
+        {[['overview','Overview'],['contracts','Contracts'],['financials','Invoices & Payments'],['communications','Communications']].map(([id, label]) => (
           <button key={id} onClick={() => setActiveTab(id)}
             className={clsx('px-6 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px',
               activeTab === id ? 'border-navy-600 text-navy-700' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300')}>
@@ -708,6 +977,36 @@ function VendorDetailPage({ vendor, onBack }) {
           </div>
         </div>
       )}
+
+      {/* ── Invoices & Payments ── */}
+      {activeTab === 'financials' && (() => {
+        const totalInvoiced    = vendorInvoices.reduce((s, i) => s + i.amount, 0);
+        const totalOutstanding = vendorInvoices.reduce((s, i) => s + vBal(i), 0);
+        const totalPaid        = vendorInvoices.reduce((s, i) => s + vPaidAmt(i), 0);
+        const overdueCount     = vendorInvoices.filter(i => vStatus(i) === 'overdue').length;
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-3">
+              <StatCard label="Total Invoiced"   value={formatCurrency(totalInvoiced)} />
+              <StatCard label="Outstanding"      value={formatCurrency(totalOutstanding)} />
+              <StatCard label="Total Paid"       value={formatCurrency(totalPaid)} />
+              <StatCard label="Overdue"          value={overdueCount > 0 ? `${overdueCount} invoice${overdueCount !== 1 ? 's' : ''}` : 'None'} />
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-500">{vendorInvoices.length} invoice{vendorInvoices.length !== 1 ? 's' : ''} on file</p>
+              <Button variant="primary" size="sm" onClick={() => setShowAddInv(true)}><Plus size={12}/>Add Invoice</Button>
+            </div>
+            <Card padding={false}>
+              {vendorInvoices.length === 0 ? (
+                <div className="py-12 text-center text-sm text-slate-400">No invoices on file for {vendor.name}.</div>
+              ) : vendorInvoices.map(inv => (
+                <VInvoiceRow key={inv.id} invoice={inv} onPaymentAdded={handleVendorPayment}/>
+              ))}
+            </Card>
+            {showAddInv && <VendorAddInvoiceModal vendor={vendor} onClose={() => setShowAddInv(false)} onSave={handleAddVendorInvoice}/>}
+          </div>
+        );
+      })()}
 
       {/* Move-to-Contracts picker overlay */}
       {movingFile && (
