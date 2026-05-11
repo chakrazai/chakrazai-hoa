@@ -4,7 +4,7 @@ import { getCommunityId, resolveCommunityId } from '../lib/community';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
   AlertTriangle, Users, ChevronRight, Home, Shield,
-  LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send, Paperclip,
+  LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send, Paperclip, Tablet,
 } from 'lucide-react';
 import { AttachmentChip, DocPickerModal } from './OtherPages.jsx';
 import { getResidentFloor } from './BuildingPage';
@@ -491,6 +491,8 @@ function OverviewTab({ r, onUpdate }) {
       ownerName: r.ownerName, coOwner: r.coOwner || '',
       moveInDate: r.moveInDate, moveOutDate: r.moveOutDate || '',
       portal: r.portal, autoPay: r.autoPay,
+      electronicVoting: r.electronicVoting || false,
+      electronicVotingConsentDate: r.electronicVotingConsentDate || '',
     });
     setEditing(true);
   };
@@ -530,6 +532,39 @@ function OverviewTab({ r, onUpdate }) {
         <div className="flex items-center gap-2">
           <input type="checkbox" id="ep-ap" checked={draft.autoPay} onChange={e => d('autoPay')(e.target.checked)} className="w-4 h-4 rounded border-slate-300" />
           <label htmlFor="ep-ap" className="text-sm text-slate-700 cursor-pointer">Auto-Pay enrolled</label>
+        </div>
+
+        {/* Electronic Voting — Civil Code § 5105 opt-in */}
+        <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 space-y-2">
+          <div className="flex items-start gap-2">
+            <Tablet size={14} className="text-blue-600 mt-0.5 flex-shrink-0"/>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-blue-900">Electronic Voting (Civil Code § 5105)</p>
+              <p className="text-[11px] text-blue-700 mt-0.5">Resident must affirmatively opt in to receive and submit ballots electronically. Members who do not opt in will receive physical mail ballots. Consent is per-election and may be revoked in writing.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="ep-ev" checked={!!draft.electronicVoting}
+              onChange={e => {
+                d('electronicVoting')(e.target.checked);
+                if (e.target.checked && !draft.electronicVotingConsentDate) {
+                  d('electronicVotingConsentDate')(new Date().toISOString().split('T')[0]);
+                }
+                if (!e.target.checked) d('electronicVotingConsentDate')('');
+              }}
+              className="w-4 h-4 rounded border-blue-300 accent-blue-600"/>
+            <label htmlFor="ep-ev" className="text-sm text-blue-900 cursor-pointer font-medium">
+              Opt in to electronic ballot delivery &amp; submission
+            </label>
+          </div>
+          {draft.electronicVoting && (
+            <div>
+              <label className={fLabel}>Consent Date</label>
+              <input type="date" value={draft.electronicVotingConsentDate}
+                onChange={e => d('electronicVotingConsentDate')(e.target.value)}
+                className={iCls()}/>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -598,6 +633,28 @@ function OverviewTab({ r, onUpdate }) {
           <div><p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Move-out Date</p><p className="text-sm text-slate-800 mt-0.5">{r.moveOutDate}</p></div>
         </div>
       )}
+
+      {/* Electronic Voting preference */}
+      <SectionLabel>Electronic Voting (Civil Code § 5105)</SectionLabel>
+      <div className={clsx('flex items-start gap-3 py-3 px-3 rounded-xl border', r.electronicVoting ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100')}>
+        <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5', r.electronicVoting ? 'bg-blue-100' : 'bg-slate-100')}>
+          <Tablet size={13} className={r.electronicVoting ? 'text-blue-600' : 'text-slate-400'} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Ballot Delivery Preference</p>
+          {r.electronicVoting ? (
+            <>
+              <p className="text-sm font-semibold text-blue-800 mt-0.5">Electronic — Opted In</p>
+              <p className="text-[11px] text-blue-600 mt-0.5">Consent recorded {r.electronicVotingConsentDate || 'on file'}. Ballot will be delivered and submitted electronically.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-slate-700 mt-0.5">Physical Mail Ballot</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Member has not opted in to electronic voting. A paper ballot package will be mailed.</p>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1637,6 +1694,8 @@ function fromDb(row) {
     garageFobLog:     row.garage_fob_log     || [],
     commonAreaFobs:   row.common_area_fobs   || [],
     commonAreaFobLog: row.common_area_fob_log || [],
+    electronicVoting:            row.electronic_voting_consent      || false,
+    electronicVotingConsentDate: row.electronic_voting_consent_date || '',
   };
 }
 
@@ -1665,6 +1724,8 @@ function toDb(r) {
     garageFobLog:     r.garageFobLog     || [],
     commonAreaFobs:   r.commonAreaFobs   || [],
     commonAreaFobLog: r.commonAreaFobLog || [],
+    electronicVoting:            r.electronicVoting            || false,
+    electronicVotingConsentDate: r.electronicVotingConsentDate || null,
   };
 }
 

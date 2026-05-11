@@ -7,7 +7,7 @@ import {
   Plus, X, Check, Edit2, Trash2, ChevronRight, Search, Shield,
   Lock, Unlock, Clock, FileText, CheckCircle, XCircle, AlertTriangle,
   Award, Printer, Info, Bell, Download, Users, Calendar, Mail, Phone,
-  Archive, UserCheck, AlertCircle, Scale,
+  Archive, UserCheck, AlertCircle, Scale, Send, Tablet,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, Badge, Button, MetricCard, Alert } from '../components/ui';
@@ -88,26 +88,26 @@ const HOA_INFO = {
 };
 
 const SAMPLE_RESIDENTS = [
-  { unit: 'A1', name: 'James Wilson',      email: 'j.wilson@email.com',    phone: '(916) 555-0101', address1: '1000 Oakwood Dr, Apt A1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'A2', name: 'Maria Santos',      email: 'm.santos@email.com',    phone: '(916) 555-0102', address1: '1000 Oakwood Dr, Apt A2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: false, isOwnerResident: true  },
-  { unit: 'A3', name: 'David Kim',         email: 'd.kim@email.com',       phone: '(916) 555-0103', address1: '1000 Oakwood Dr, Apt A3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'A4', name: 'Lisa Chen',         email: 'l.chen@email.com',      phone: '(916) 555-0104', address1: '1000 Oakwood Dr, Apt A4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: true,  isOwnerResident: true  },
-  { unit: 'A5', name: 'Robert Hayes',      email: 'r.hayes@email.com',     phone: '(916) 555-0105', address1: '1000 Oakwood Dr, Apt A5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'B1', name: 'Emily Nguyen',      email: 'e.nguyen@email.com',    phone: '(916) 555-0106', address1: '1002 Oakwood Dr, Apt B1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: false },
-  { unit: 'B2', name: 'Michael Torres',    email: 'm.torres@email.com',    phone: '(916) 555-0107', address1: '1002 Oakwood Dr, Apt B2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: true,  isOwnerResident: true  },
-  { unit: 'B3', name: 'Sarah Park',        email: 's.park@email.com',      phone: '(916) 555-0108', address1: '1002 Oakwood Dr, Apt B3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'B4', name: 'Thomas Green',      email: 't.green@email.com',     phone: '(916) 555-0109', address1: '1002 Oakwood Dr, Apt B4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'B5', name: 'Anna Lopez',        email: 'a.lopez@email.com',     phone: '(916) 555-0110', address1: '1002 Oakwood Dr, Apt B5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'C1', name: 'Steven Brown',      email: 's.brown@email.com',     phone: '(916) 555-0111', address1: '1004 Oakwood Dr, Apt C1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'C2', name: 'Jennifer Lee',      email: 'j.lee@email.com',       phone: '(916) 555-0112', address1: '1004 Oakwood Dr, Apt C2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'C3', name: 'Christopher Davis', email: 'c.davis@email.com',     phone: '(916) 555-0113', address1: '1004 Oakwood Dr, Apt C3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: false, isOwnerResident: true  },
-  { unit: 'C4', name: 'Amanda Clark',      email: 'a.clark@email.com',     phone: '(916) 555-0114', address1: '1004 Oakwood Dr, Apt C4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'C5', name: 'Kevin Martinez',    email: 'k.martinez@email.com',  phone: '(916) 555-0115', address1: '1004 Oakwood Dr, Apt C5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'D1', name: 'Rachel Johnson',    email: 'r.johnson@email.com',   phone: '(916) 555-0116', address1: '1006 Oakwood Dr, Apt D1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'D2', name: 'Brian Anderson',    email: 'b.anderson@email.com',  phone: '(916) 555-0117', address1: '1006 Oakwood Dr, Apt D2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'D3', name: 'Megan White',       email: 'm.white@email.com',     phone: '(916) 555-0118', address1: '1006 Oakwood Dr, Apt D3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
-  { unit: 'D4', name: 'Daniel Thompson',   email: 'd.thompson@email.com',  phone: '(916) 555-0119', address1: '1006 Oakwood Dr, Apt D4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: true,  isOwnerResident: true  },
-  { unit: 'D5', name: 'Jessica Garcia',    email: 'j.garcia@email.com',    phone: '(916) 555-0120', address1: '1006 Oakwood Dr, Apt D5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true  },
+  { unit: 'A1', name: 'James Wilson',      email: 'j.wilson@email.com',    phone: '(916) 555-0101', address1: '1000 Oakwood Dr, Apt A1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-01-15' },
+  { unit: 'A2', name: 'Maria Santos',      email: 'm.santos@email.com',    phone: '(916) 555-0102', address1: '1000 Oakwood Dr, Apt A2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: false, isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'A3', name: 'David Kim',         email: 'd.kim@email.com',       phone: '(916) 555-0103', address1: '1000 Oakwood Dr, Apt A3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-02-01' },
+  { unit: 'A4', name: 'Lisa Chen',         email: 'l.chen@email.com',      phone: '(916) 555-0104', address1: '1000 Oakwood Dr, Apt A4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: true,  isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'A5', name: 'Robert Hayes',      email: 'r.hayes@email.com',     phone: '(916) 555-0105', address1: '1000 Oakwood Dr, Apt A5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-01-20' },
+  { unit: 'B1', name: 'Emily Nguyen',      email: 'e.nguyen@email.com',    phone: '(916) 555-0106', address1: '1002 Oakwood Dr, Apt B1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: false, electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'B2', name: 'Michael Torres',    email: 'm.torres@email.com',    phone: '(916) 555-0107', address1: '1002 Oakwood Dr, Apt B2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: true,  isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'B3', name: 'Sarah Park',        email: 's.park@email.com',      phone: '(916) 555-0108', address1: '1002 Oakwood Dr, Apt B3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-01-10' },
+  { unit: 'B4', name: 'Thomas Green',      email: 't.green@email.com',     phone: '(916) 555-0109', address1: '1002 Oakwood Dr, Apt B4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'B5', name: 'Anna Lopez',        email: 'a.lopez@email.com',     phone: '(916) 555-0110', address1: '1002 Oakwood Dr, Apt B5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-03-05' },
+  { unit: 'C1', name: 'Steven Brown',      email: 's.brown@email.com',     phone: '(916) 555-0111', address1: '1004 Oakwood Dr, Apt C1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'C2', name: 'Jennifer Lee',      email: 'j.lee@email.com',       phone: '(916) 555-0112', address1: '1004 Oakwood Dr, Apt C2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-02-14' },
+  { unit: 'C3', name: 'Christopher Davis', email: 'c.davis@email.com',     phone: '(916) 555-0113', address1: '1004 Oakwood Dr, Apt C3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: true,  hasViolation: false, isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'C4', name: 'Amanda Clark',      email: 'a.clark@email.com',     phone: '(916) 555-0114', address1: '1004 Oakwood Dr, Apt C4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-01-30' },
+  { unit: 'C5', name: 'Kevin Martinez',    email: 'k.martinez@email.com',  phone: '(916) 555-0115', address1: '1004 Oakwood Dr, Apt C5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'D1', name: 'Rachel Johnson',    email: 'r.johnson@email.com',   phone: '(916) 555-0116', address1: '1006 Oakwood Dr, Apt D1', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-02-20' },
+  { unit: 'D2', name: 'Brian Anderson',    email: 'b.anderson@email.com',  phone: '(916) 555-0117', address1: '1006 Oakwood Dr, Apt D2', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'D3', name: 'Megan White',       email: 'm.white@email.com',     phone: '(916) 555-0118', address1: '1006 Oakwood Dr, Apt D3', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-03-01' },
+  { unit: 'D4', name: 'Daniel Thompson',   email: 'd.thompson@email.com',  phone: '(916) 555-0119', address1: '1006 Oakwood Dr, Apt D4', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: true,  isOwnerResident: true,  electronicVoting: false, electronicVotingConsentDate: '' },
+  { unit: 'D5', name: 'Jessica Garcia',    email: 'j.garcia@email.com',    phone: '(916) 555-0120', address1: '1006 Oakwood Dr, Apt D5', city: 'Sacramento', state: 'CA', zip: '95814', isDelinquent: false, hasViolation: false, isOwnerResident: true,  electronicVoting: true,  electronicVotingConsentDate: '2026-01-25' },
 ];
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
@@ -1636,7 +1636,119 @@ function StatementsTab({ election, role, onUpdate, addAudit }) {
 }
 
 // ─── Envelopes Tab ────────────────────────────────────────────────────────────
-function EnvelopesTab({ election, role }) {
+function ElectronicBallotPanel({ residents, election, addAudit }) {
+  const eligible       = residents.filter(r => r.isOwnerResident !== false);
+  const electronic     = eligible.filter(r => r.electronicVoting);
+  const paper          = eligible.filter(r => !r.electronicVoting);
+  const [sent, setSent] = useState({});
+
+  const sendBallot = (r) => {
+    setSent(p => ({ ...p, [r.unit]: new Date().toLocaleString() }));
+    if (addAudit) addAudit(
+      'Electronic Ballot Sent',
+      `Electronic ballot sent to ${r.name} (Unit ${r.unit}) at ${r.email}. Civil Code § 5105.`,
+      'blue'
+    );
+  };
+  const sendAll = () => {
+    const now = new Date().toLocaleString();
+    const updates = {};
+    electronic.filter(r => !sent[r.unit]).forEach(r => { updates[r.unit] = now; });
+    setSent(p => ({ ...p, ...updates }));
+    if (addAudit && Object.keys(updates).length > 0) addAudit(
+      'Electronic Ballots Sent (Batch)',
+      `Electronic ballots sent to ${Object.keys(updates).length} opted-in member(s). Civil Code § 5105.`,
+      'blue'
+    );
+  };
+
+  const sentCount = electronic.filter(r => sent[r.unit]).length;
+
+  return (
+    <div className="mb-6">
+      {/* Summary banner */}
+      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl mb-3">
+        <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-2">
+          Electronic Voting — Civil Code § 5105 (AB 2159)
+        </p>
+        <p className="text-[11px] text-blue-700 mb-3">
+          Members who affirmatively opted in receive ballots electronically. All other eligible members receive physical mail ballot packages. Opt-in preference is managed in each resident's profile.
+        </p>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-white rounded-lg p-2 text-center border border-blue-100">
+            <p className="text-lg font-bold text-blue-700">{electronic.length}</p>
+            <p className="text-[10px] text-slate-500">Electronic (opted in)</p>
+          </div>
+          <div className="bg-white rounded-lg p-2 text-center border border-slate-100">
+            <p className="text-lg font-bold text-slate-700">{paper.length}</p>
+            <p className="text-[10px] text-slate-500">Physical mail ballot</p>
+          </div>
+          <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
+            <p className="text-lg font-bold text-emerald-700">{sentCount}/{electronic.length}</p>
+            <p className="text-[10px] text-slate-500">Electronic sent</p>
+          </div>
+        </div>
+        {electronic.length > 0 && sentCount < electronic.length && (
+          <Button variant="primary" size="sm" onClick={sendAll}>
+            <Send size={11}/>Send All {electronic.length - sentCount} Pending Electronic Ballots
+          </Button>
+        )}
+        {sentCount === electronic.length && electronic.length > 0 && (
+          <p className="text-xs text-emerald-700 font-semibold flex items-center gap-1"><Check size={12}/>All electronic ballots sent</p>
+        )}
+      </div>
+
+      {/* Electronic voters list */}
+      {electronic.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+            <Tablet size={10}/>Electronic Ballot Recipients ({electronic.length})
+          </p>
+          <div className="space-y-1.5">
+            {electronic.map(r => (
+              <div key={r.unit} className={clsx('flex items-center justify-between px-3 py-2 rounded-xl border text-xs', sent[r.unit] ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200')}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-semibold text-slate-800 flex-shrink-0">Unit {r.unit}</span>
+                  <span className="text-slate-600 truncate">{r.name}</span>
+                  {r.email && <span className="text-slate-400 text-[11px] truncate hidden sm:block">{r.email}</span>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {sent[r.unit]
+                    ? <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1"><Check size={10}/>Sent {sent[r.unit]}</span>
+                    : <button onClick={() => sendBallot(r)}
+                        className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">
+                        <Send size={10}/>Send Ballot
+                      </button>
+                  }
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Paper voters note */}
+      {paper.length > 0 && (
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+            <Mail size={10}/>Physical Mail Ballot Required ({paper.length})
+          </p>
+          <p className="text-[11px] text-slate-500">The following members have not opted in to electronic voting and must receive a physical ballot package per Civil Code § 5105. Use the envelope printing tools below.</p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {paper.slice(0, 12).map(r => (
+              <span key={r.unit} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-600">
+                Unit {r.unit} — {r.name}
+              </span>
+            ))}
+            {paper.length > 12 && <span className="text-[10px] text-slate-400 italic">+{paper.length - 12} more</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EnvelopesTab({ election, role, addAudit, residents = SAMPLE_RESIDENTS }) {
   const ENV_TYPES = {
     ballot_mailing: {
       label: 'Ballot Mailing Envelope',
@@ -1789,6 +1901,9 @@ function EnvelopesTab({ election, role }) {
 
   return (
     <div>
+      <ElectronicBallotPanel residents={residents} election={election} addAudit={addAudit}/>
+      <SL>Physical Ballot Envelopes</SL>
+      <p className="text-[11px] text-slate-500 mb-3">Print envelope packages for members who have <strong>not</strong> opted in to electronic voting. (Civil Code § 5115)</p>
       <SL>Envelope Type</SL>
       <div className="space-y-2 mb-4">
         {Object.entries(ENV_TYPES).map(([k, v]) => (
@@ -1995,7 +2110,7 @@ function ElectionDetail({ election, role, onUpdate, onClose, apiResidents }) {
         {tab === 'notices'     && <NoticesTab     election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'compliance'  && <ComplianceTab  election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
         {tab === 'statements' && <StatementsTab election={election} role={role} onUpdate={onUpdate} addAudit={addAudit}/>}
-        {tab === 'envelopes' && <EnvelopesTab election={election} role={role}/>}
+        {tab === 'envelopes' && <EnvelopesTab election={election} role={role} addAudit={addAudit} residents={apiResidents?.length ? apiResidents : SAMPLE_RESIDENTS}/>}
         {tab === 'audit' && (
           <div>
             <div className="flex items-center justify-between mt-1 mb-1">
