@@ -181,22 +181,22 @@ residentRouter.put('/:id', async (req, res, next) => {
             moveInDate,moveOutDate,hoaAmount,hoaPaymentStatus,balance,status,
             portal,autoPay,parkingSpaces,tenants,relatives,
             guestParkingTags,garageFobs,garageFobLog,commonAreaFobs,commonAreaFobLog,
-            electronicVoting,electronicVotingConsentDate } = req.body;
+            electronicVoting,electronicVotingConsentDate,electronicStatements } = req.body;
     const { rows } = await db.query(
       `UPDATE residents SET
          unit=$1,owner_name=$2,co_owner=$3,nit_number=$4,address=$5,email=$6,phone=$7,
          move_in_date=$8,move_out_date=$9,hoa_amount=$10,hoa_payment_status=$11,balance=$12,status=$13,
          portal_status=$14,auto_pay=$15,parking_spaces=$16,tenants=$17,relatives=$18,
          guest_parking_tags=$19,garage_fobs=$20,garage_fob_log=$21,common_area_fobs=$22,common_area_fob_log=$23,
-         electronic_voting_consent=$24,electronic_voting_consent_date=$25
-       WHERE id=$26 RETURNING *`,
+         electronic_voting_consent=$24,electronic_voting_consent_date=$25,electronic_statements=$26
+       WHERE id=$27 RETURNING *`,
       [unit,ownerName,coOwner||null,nitNumber||null,address||null,email||null,phone||null,
        moveInDate||null,moveOutDate||null,hoaAmount||150,hoaPaymentStatus||'current',balance||0,status||'good',
        portal||'none',autoPay||false,
        JSON.stringify(parkingSpaces||[]),JSON.stringify(tenants||[]),JSON.stringify(relatives||[]),
        JSON.stringify(guestParkingTags||[]),JSON.stringify(garageFobs||[]),JSON.stringify(garageFobLog||[]),
        JSON.stringify(commonAreaFobs||[]),JSON.stringify(commonAreaFobLog||[]),
-       electronicVoting||false, electronicVotingConsentDate||null,
+       electronicVoting||false, electronicVotingConsentDate||null, electronicStatements||false,
        req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ message: 'Resident not found' });

@@ -7,3 +7,4 @@ export { default as BuildingPage } from './BuildingPage.jsx';
 export { BoardMembersPage, ElectionsPage, MeetingsPage } from './GovernancePages.jsx';
 export { default as BallotManagementPage } from './BallotManagementPage.jsx';
 export { default as AmenitiesPage } from './AmenitiesPage.jsx';
+export { default as PreferencesPage } from './PreferencesPage.jsx';

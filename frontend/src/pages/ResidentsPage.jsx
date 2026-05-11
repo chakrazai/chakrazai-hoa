@@ -493,6 +493,7 @@ function OverviewTab({ r, onUpdate }) {
       portal: r.portal, autoPay: r.autoPay,
       electronicVoting: r.electronicVoting || false,
       electronicVotingConsentDate: r.electronicVotingConsentDate || '',
+      electronicStatements: r.electronicStatements || false,
     });
     setEditing(true);
   };
@@ -577,6 +578,31 @@ function OverviewTab({ r, onUpdate }) {
                 className={iCls()}/>
             </div>
           )}
+        </div>
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+          <p className="text-xs font-semibold text-slate-700">Statement Delivery Preference</p>
+          <div className="space-y-2 pl-1">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="radio" name="stmtDelivery" value="paper"
+                checked={!draft.electronicStatements}
+                onChange={() => d('electronicStatements')(false)}
+                className="w-4 h-4 accent-slate-600"/>
+              <div>
+                <span className="text-sm font-medium text-slate-800">Paper Statements</span>
+                <span className="text-[11px] text-slate-400 ml-1.5">(Default)</span>
+              </div>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="radio" name="stmtDelivery" value="electronic"
+                checked={!!draft.electronicStatements}
+                onChange={() => d('electronicStatements')(true)}
+                className="w-4 h-4 accent-green-600"/>
+              <div>
+                <span className="text-sm font-medium text-green-800">Electronic Statements</span>
+                <p className="text-[11px] text-slate-500">Statements emailed to member's email on file</p>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -675,6 +701,32 @@ function OverviewTab({ r, onUpdate }) {
             {r.electronicVoting && r.electronicVotingConsentDate && (
               <p className="text-[10px] text-blue-600 mt-0.5">Consent recorded {r.electronicVotingConsentDate}</p>
             )}
+          </div>
+        </label>
+      </div>
+
+      {/* Electronic Statements preference — quick-select without entering full edit */}
+      <SectionLabel>Statement Delivery Preference</SectionLabel>
+      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+        <label className={clsx('flex items-center gap-2.5 cursor-pointer px-2 py-2 rounded-lg border transition-colors', !r.electronicStatements ? 'bg-white border-slate-300 shadow-sm' : 'border-transparent hover:bg-white')}>
+          <input type="radio" name={`stmt-${r.id}`} value="paper"
+            checked={!r.electronicStatements}
+            onChange={() => onUpdate({ electronicStatements: false })}
+            className="w-4 h-4 accent-slate-600 flex-shrink-0"/>
+          <div>
+            <span className="text-sm font-medium text-slate-800">Paper Statements</span>
+            <span className="text-[11px] text-slate-400 ml-1.5">(Default)</span>
+            <p className="text-[11px] text-slate-500">Statements mailed to unit address</p>
+          </div>
+        </label>
+        <label className={clsx('flex items-center gap-2.5 cursor-pointer px-2 py-2 rounded-lg border transition-colors', r.electronicStatements ? 'bg-green-50 border-green-300 shadow-sm' : 'border-transparent hover:bg-white')}>
+          <input type="radio" name={`stmt-${r.id}`} value="electronic"
+            checked={!!r.electronicStatements}
+            onChange={() => onUpdate({ electronicStatements: true })}
+            className="w-4 h-4 accent-green-600 flex-shrink-0"/>
+          <div>
+            <span className="text-sm font-medium text-green-800">Electronic Statements</span>
+            <p className="text-[11px] text-slate-500">Statements emailed to {r.email || 'email on file'}</p>
           </div>
         </label>
       </div>
@@ -1719,6 +1771,7 @@ function fromDb(row) {
     commonAreaFobLog: row.common_area_fob_log || [],
     electronicVoting:            row.electronic_voting_consent      || false,
     electronicVotingConsentDate: row.electronic_voting_consent_date || '',
+    electronicStatements:        row.electronic_statements          || false,
   };
 }
 
@@ -1749,6 +1802,7 @@ function toDb(r) {
     commonAreaFobLog: r.commonAreaFobLog || [],
     electronicVoting:            r.electronicVoting            || false,
     electronicVotingConsentDate: r.electronicVotingConsentDate || null,
+    electronicStatements:        r.electronicStatements        || false,
   };
 }
 

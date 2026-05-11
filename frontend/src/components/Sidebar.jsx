@@ -3,7 +3,7 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Shield, CreditCard, BarChart2, Receipt,
   AlertTriangle, Wrench, Users, FolderOpen, MessageSquare,
-  ChevronDown, LogOut, Map, Layers, UserCheck, Vote, CalendarDays, ClipboardList, Building2, FileText,
+  ChevronDown, LogOut, Map, Layers, UserCheck, Vote, CalendarDays, ClipboardList, Building2, FileText, Settings,
 } from 'lucide-react';
 import { useAuthStore } from '../hooks/useStore';
 
@@ -115,16 +115,25 @@ export default function Sidebar({ currentPage, onNavigate, community }) {
       {/* User footer */}
       <div className="px-3 py-3 border-t border-slate-100">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-navy-700 flex items-center justify-center flex-shrink-0">
+          <button onClick={() => onNavigate('preferences')}
+            className="w-7 h-7 rounded-full bg-navy-700 flex items-center justify-center flex-shrink-0 hover:bg-navy-600 transition-colors">
             <span className="text-[10px] font-semibold text-white">
               {user ? `${user.firstName?.[0]}${user.lastName?.[0]}` : 'JR'}
             </span>
-          </div>
+          </button>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-slate-800 truncate">{user?.name || 'Jane Ramirez'}</p>
-            <p className="text-[10px] text-slate-400">{user?.role || 'Board President'}</p>
+            <button onClick={() => onNavigate('preferences')}
+              className="text-left hover:text-navy-700 transition-colors w-full">
+              <p className="text-xs font-medium text-slate-800 truncate">{user?.name || 'Jane Ramirez'}</p>
+              <p className="text-[10px] text-slate-400">{user?.role || 'Board President'}</p>
+            </button>
           </div>
-          <button onClick={logout} className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+          <button onClick={() => onNavigate('preferences')} title="Preferences"
+            className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+            <Settings size={13} />
+          </button>
+          <button onClick={logout} title="Sign out"
+            className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
             <LogOut size={13} />
           </button>
         </div>
