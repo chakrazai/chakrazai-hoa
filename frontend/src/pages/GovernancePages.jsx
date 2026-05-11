@@ -3,12 +3,24 @@ import {
   Users, Vote, CalendarDays, Plus, X, Check, Edit2, Trash2,
   ChevronRight, Phone, Mail, Clock, MapPin, FileText,
   CheckCircle, XCircle, AlertCircle, Activity, Shield,
-  Search, BarChart2, User, Printer, Award, ClipboardList, ExternalLink,
+  Search, BarChart2, User, Printer, Award, ClipboardList, ExternalLink, AlertTriangle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
 import { electionsAPI, residentAPI } from '../lib/api';
 import { getCommunityId, resolveCommunityId } from '../lib/community';
+
+// ─── AB 1764 (2024) — Civil Code § 5105 nominee eligibility requirements ──────
+const AB1764_REQUIREMENTS = [
+  { id: 'is_member',      label: 'Nominee is an owner or co-owner of a separate interest in the association',                                              sublabel: 'Civil Code § 5105(b)(1)(A)',              auto: true,  autoTrue: r => !!(r.isOwnerResident ?? r.owner_name) },
+  { id: 'not_delinquent', label: 'Not delinquent in assessments exceeding $1,800 or 1% of the annual budget',                                              sublabel: 'Civil Code § 5105(b)(1)(B) — AB 1764',   auto: true,  autoTrue: r => !r.isDelinquent },
+  { id: 'no_felony',      label: 'Has not been convicted of theft, embezzlement, fraud, identity theft, elder/dependent adult financial abuse, or perjury', sublabel: 'Civil Code § 5105(b)(1)(C) — AB 1764',   auto: false, autoTrue: null },
+  { id: 'no_sex_offender',label: 'Is not required to register as a sex offender under Penal Code § 290',                                                    sublabel: 'Civil Code § 5105(b)(1)(D) — AB 1764',   auto: false, autoTrue: null },
+  { id: 'no_vendor',      label: 'Is not a vendor or contractor currently employed by or doing business with the association',                              sublabel: 'Civil Code § 5105(b)(1)(E) — AB 1764',   auto: false, autoTrue: null },
+  { id: 'no_court_removal',label:'Has not been removed from an HOA board by court order within the past 5 years',                                          sublabel: 'Civil Code § 5105(b)(1)(F) — AB 1764',   auto: false, autoTrue: null },
+  { id: 'consent',        label: 'Nominee has provided a written, signed consent to serve if elected',                                                     sublabel: 'Civil Code § 5105(a)(3)',                 auto: false, autoTrue: null },
+];
+const mkAb1764Checks = () => Object.fromEntries(AB1764_REQUIREMENTS.map(r => [r.id, false]));
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -648,13 +660,26 @@ function ElectionDetail({ election, onUpdate, onAddCandidate, onClose, onBallots
   const [tab, setTab] = useState('overview');
   const [showCandForm, setShowCandForm] = useState(false);
   const [candDraft, setCandDraft] = useState({ name:'', unit:'', email:'', phone:'', bio:'' });
+  const [ab1764Checks, setAb1764Checks] = useState(mkAb1764Checks());
+  const [selectedResident, setSelectedResident] = useState(null);
   const resName = r => r.owner_name || r.ownerName || '';
   const existingNames = new Set((election.candidates || []).map(c => c.name));
   const availableResidents = residents.filter(r => !existingNames.has(resName(r)));
 
+  const allAb1764Met = AB1764_REQUIREMENTS.every(r => ab1764Checks[r.id]);
+  const ab1764Count  = AB1764_REQUIREMENTS.filter(r => ab1764Checks[r.id]).length;
+
   const selectResident = (name) => {
     const r = residents.find(x => resName(x) === name);
+    setSelectedResident(r || null);
     setCandDraft(d => ({ ...d, name, unit: r?.unit || '', email: r?.email || '', phone: r?.phone || '' }));
+    if (r) {
+      setAb1764Checks(p => ({
+        ...p,
+        is_member:      !!(r.isOwnerResident ?? r.owner_name),
+        not_delinquent: !r.isDelinquent,
+      }));
+    }
   };
 
   const tabs = [
@@ -667,15 +692,21 @@ function ElectionDetail({ election, onUpdate, onAddCandidate, onClose, onBallots
   const totalVotes = election.candidates.reduce((s, c) => s + c.votes, 0);
   const st = electionStatusMap[election.status] || { l: election.status, c: 'gray' };
 
+  const resetCandForm = () => {
+    setShowCandForm(false);
+    setCandDraft({ name:'', unit:'', email:'', phone:'', bio:'' });
+    setAb1764Checks(mkAb1764Checks());
+    setSelectedResident(null);
+  };
+
   const addCandidate = () => {
-    if (!candDraft.name.trim()) return;
+    if (!candDraft.name.trim() || !allAb1764Met) return;
     if (onAddCandidate) {
       onAddCandidate(election.id, { ...candDraft });
     } else {
       onUpdate({ candidates: [...election.candidates, { ...candDraft, id: Date.now(), votes: 0, elected: false }] });
     }
-    setCandDraft({ name:'', unit:'', email:'', phone:'', bio:'' });
-    setShowCandForm(false);
+    resetCandForm();
   };
 
   return (
@@ -759,9 +790,9 @@ function ElectionDetail({ election, onUpdate, onAddCandidate, onClose, onBallots
               )}
             </div>
             {showCandForm && (
-              <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2">
+              <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2.5">
                 <div>
-                  <label className={fLabel}>Resident</label>
+                  <label className={fLabel}>Resident *</label>
                   {availableResidents.length > 0 ? (
                     <select value={candDraft.name} onChange={e => selectResident(e.target.value)} className={selCls}>
                       <option value="">— Select resident —</option>
@@ -781,7 +812,65 @@ function ElectionDetail({ election, onUpdate, onAddCandidate, onClose, onBallots
                   </div>
                 )}
                 <div><label className={fLabel}>Bio / Statement</label><textarea value={candDraft.bio} onChange={e=>setCandDraft(d=>({...d,bio:e.target.value}))} rows={2} className={iCls}/></div>
-                <div className="flex gap-2"><Button variant="primary" size="sm" onClick={addCandidate}><Check size={11}/>Add</Button><Button variant="ghost" size="sm" onClick={()=>{setShowCandForm(false);setCandDraft({name:'',unit:'',email:'',phone:'',bio:''});}}>Cancel</Button></div>
+
+                {/* AB 1764 (2024) requirements — all must be confirmed before adding */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div>
+                      <label className={fLabel + ' mb-0'}>AB 1764 (2024) — Nominee Eligibility Requirements</label>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Confirm all requirements before adding. (Civil Code § 5105)</p>
+                    </div>
+                    <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0', allAb1764Met ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                      {ab1764Count}/{AB1764_REQUIREMENTS.length}
+                    </span>
+                  </div>
+                  <div className="space-y-1 p-2.5 bg-white rounded-xl border border-slate-200">
+                    {AB1764_REQUIREMENTS.map(req => {
+                      const isAuto  = req.auto && !!selectedResident;
+                      const checked = !!ab1764Checks[req.id];
+                      const autoVal = isAuto ? req.autoTrue(selectedResident) : null;
+                      const failed  = isAuto && autoVal === false;
+                      return (
+                        <label key={req.id} className={clsx(
+                          'flex items-start gap-2 rounded-lg px-1.5 py-1.5 transition-colors',
+                          failed  ? 'bg-rose-50 cursor-not-allowed' :
+                          checked ? 'bg-emerald-50 cursor-pointer' : 'hover:bg-slate-50 cursor-pointer'
+                        )}>
+                          <input type="checkbox" checked={checked}
+                            onChange={e => !failed && setAb1764Checks(p => ({ ...p, [req.id]: e.target.checked }))}
+                            disabled={failed}
+                            className="mt-0.5 flex-shrink-0 accent-emerald-600"/>
+                          <div className="min-w-0">
+                            <span className={clsx('text-xs block leading-tight', failed ? 'text-rose-700 font-medium' : checked ? 'text-emerald-800 font-medium' : 'text-slate-700')}>
+                              {req.label}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {req.sublabel}
+                              {isAuto && <span className="ml-1 italic">{autoVal ? '— confirmed from record' : '— not met per record'}</span>}
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {!allAb1764Met && candDraft.name && (
+                    <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                      <AlertTriangle size={11}/>Confirm all {AB1764_REQUIREMENTS.length} requirements to enable adding this nominee
+                    </p>
+                  )}
+                  {allAb1764Met && (
+                    <p className="text-xs text-emerald-700 mt-1.5 flex items-center gap-1">
+                      <Check size={11}/>All AB 1764 (2024) requirements confirmed
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="primary" size="sm" onClick={addCandidate} disabled={!candDraft.name.trim() || !allAb1764Met}>
+                    <Check size={11}/>Add Nominee
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={resetCandForm}>Cancel</Button>
+                </div>
               </div>
             )}
             <div className="space-y-3">
