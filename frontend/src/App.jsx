@@ -9,7 +9,7 @@ import { useAuthStore } from './hooks/useStore';
 // Lazy page imports
 import Dashboard from './pages/Dashboard';
 
-import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities, BuildingPage, BoardMembersPage, ElectionsPage, MeetingsPage, BallotManagementPage, AmenitiesPage, PreferencesPage } from './pages/index.jsx';
+import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities, BuildingPage, BoardMembersPage, ElectionsPage, MeetingsPage, BallotManagementPage, AmenitiesPage, PreferencesPage, FinancialsPage } from './pages/index.jsx';
 import Map from './pages/Map.jsx';
 import { PrivacyPolicyPage, TermsOfUsePage, LegalAcceptanceModal, getLegalAcceptance } from './pages/LegalPages.jsx';
 
@@ -19,7 +19,7 @@ const queryClient = new QueryClient({
 
 const pageTitles = {
   dashboard: 'Dashboard', compliance: 'Compliance', dues: 'Dues & Payments',
-  accounting: 'Accounting', tax: 'Tax Reports', violations: 'Violations',
+  accounting: 'Accounting', tax: 'Tax Reports', financials: 'Invoices & Payments', violations: 'Violations',
   maintenance: 'Maintenance', vendors: 'Vendors', residents: 'Residents',
   documents: 'Documents', communications: 'Communications', communities: 'Communities',
   amenities: 'Amenities', map: 'Community Map', building: 'Building Maps',
@@ -44,6 +44,7 @@ function AppLayout() {
     dues:           <Dues />,
     accounting:     <Accounting />,
     tax:            <Tax />,
+    financials:     <FinancialsPage />,
     violations:     <Violations />,
     maintenance:    <Maintenance />,
     vendors:        <Vendors />,

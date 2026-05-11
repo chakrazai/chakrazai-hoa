@@ -8,3 +8,4 @@ export { BoardMembersPage, ElectionsPage, MeetingsPage } from './GovernancePages
 export { default as BallotManagementPage } from './BallotManagementPage.jsx';
 export { default as AmenitiesPage } from './AmenitiesPage.jsx';
 export { default as PreferencesPage } from './PreferencesPage.jsx';
+export { default as FinancialsPage } from './FinancialsPage.jsx';

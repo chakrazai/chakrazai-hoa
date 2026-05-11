@@ -15,7 +15,8 @@ const navGroups = [
   { label: 'Finance', items: [
     { id: 'dues',         Icon: CreditCard,       label: 'Dues & Payments', badge: 5, badgeColor: 'amber' },
     { id: 'accounting',   Icon: BarChart2,        label: 'Accounting' },
-    { id: 'tax',          Icon: Receipt,          label: 'Tax Reports' },
+    { id: 'financials',   Icon: Receipt,          label: 'Invoices & Payments' },
+    { id: 'tax',          Icon: FileText,         label: 'Tax Reports' },
   ]},
   { label: 'Operations', items: [
     { id: 'violations',   Icon: AlertTriangle,    label: 'Violations',      badge: 7, badgeColor: 'amber' },
