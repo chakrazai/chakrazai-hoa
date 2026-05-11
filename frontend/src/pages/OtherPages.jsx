@@ -337,9 +337,24 @@ function VendorCommsModal({ vendor, onClose }) {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [composeSent, setComposeSent] = useState(false);
+  const [renewingId, setRenewingId] = useState(null);
+  const [renewForm, setRenewForm] = useState({ newEnd: '', autoRenew: false, notes: '' });
+  const [contracts, setContracts] = useState(() => MOCK_CONTRACTS[vendor.id] || []);
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const vendorEmails = MOCK_INBOX.filter(e => e.fromType === 'vendor' && e.from === vendor.name);
+
+  const handleRenew = (c) => {
+    setRenewingId(c.id);
+    setRenewForm({ newEnd: '', autoRenew: c.autoRenew, notes: '' });
+  };
+  const confirmRenew = (c) => {
+    if (!renewForm.newEnd) return;
+    setContracts(prev => prev.map(x => x.id === c.id
+      ? { ...x, start: today, end: new Date(renewForm.newEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), status:'active', autoRenew: renewForm.autoRenew }
+      : x));
+    setRenewingId(null);
+  };
 
   const handleComposeSend = () => {
     if (!composeSubject.trim() || !composeBody.trim()) return;
@@ -372,31 +387,128 @@ function VendorCommsModal({ vendor, onClose }) {
         </div>
         {/* Tabs */}
         <div className="flex gap-1 px-6 pt-3 pb-0 border-b border-slate-100">
-          {['details','communications'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={clsx('px-3 py-1.5 text-xs font-medium rounded-t-lg transition-colors capitalize',
-                activeTab === tab ? 'bg-navy-600 text-white' : 'text-slate-500 hover:bg-slate-100')}>
-              {tab}
+          {[['details','Details'],['contracts','Contracts'],['communications','Communications']].map(([id,label]) => (
+            <button key={id} onClick={() => setActiveTab(id)}
+              className={clsx('px-3 py-1.5 text-xs font-medium rounded-t-lg transition-colors',
+                activeTab === id ? 'bg-navy-600 text-white' : 'text-slate-500 hover:bg-slate-100')}>
+              {label}
             </button>
           ))}
         </div>
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'details' && (
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Category',       value: vendor.category },
-                  { label: 'Contract Expiry', value: vendor.contractExp },
-                  { label: 'COI Status',      value: vendor.coiStatus === 'valid' ? 'Valid' : `Expiring${vendor.coiExp ? ` — ${vendor.coiExp}` : ''}` },
-                  { label: 'W-9 on File',    value: vendor.w9 ? 'Yes' : 'No' },
-                  { label: 'Annual Spend',   value: `$${(vendor.annualSpend || 0).toLocaleString()}` },
+                  { label:'Category',         value: vendor.category },
+                  { label:'Annual Spend',     value: `$${(vendor.annualSpend || 0).toLocaleString()}` },
+                  { label:'COI Status',       value: vendor.coiStatus === 'valid' ? 'Valid' : `Expiring${vendor.coiExp ? ` — ${vendor.coiExp}` : ''}` },
+                  { label:'W-9 on File',      value: vendor.w9 ? 'Yes' : 'No' },
+                  { label:'Contract Expiry',  value: vendor.contractExp },
+                  { label:'Business License', value: vendor.businessLicense || '—' },
+                  { label:'Tax ID / EIN',     value: vendor.ein || '—' },
+                  { label:'Primary Contact',  value: vendor.contactName ? `${vendor.contactName}${vendor.contactTitle ? ` — ${vendor.contactTitle}` : ''}` : '—' },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-slate-50 rounded-xl p-3">
                     <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-0.5">{label}</p>
                     <p className="text-sm font-semibold text-slate-800">{value}</p>
                   </div>
                 ))}
+                {vendor.address && (
+                  <div className="col-span-2 bg-slate-50 rounded-xl p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-0.5">Address</p>
+                    <p className="text-sm font-semibold text-slate-800">{vendor.address}</p>
+                  </div>
+                )}
+                {(vendor.phone || vendor.email) && (
+                  <div className="col-span-2 bg-slate-50 rounded-xl p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-1">Contact</p>
+                    <div className="flex gap-4 flex-wrap">
+                      {vendor.phone && <p className="text-sm font-semibold text-slate-800">{vendor.phone}</p>}
+                      {vendor.email && <p className="text-sm font-semibold text-navy-700">{vendor.email}</p>}
+                      {vendor.website && <p className="text-sm text-slate-500">{vendor.website}</p>}
+                    </div>
+                  </div>
+                )}
+                {vendor.notes && (
+                  <div className="col-span-2 bg-amber-50 border border-amber-100 rounded-xl p-3">
+                    <p className="text-[10px] text-amber-500 uppercase tracking-wide font-medium mb-0.5">Notes</p>
+                    <p className="text-xs text-slate-700">{vendor.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {activeTab === 'contracts' && (
+            <div className="p-6 space-y-3">
+              {contracts.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-8">No contracts on file for this vendor.</p>
+              ) : contracts.map(c => {
+                const isExpiring = c.status === 'expiring';
+                const isActive   = c.status === 'active';
+                const isRenewing = renewingId === c.id;
+                return (
+                  <div key={c.id} className={clsx('rounded-xl border p-4 space-y-3', isExpiring ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-white')}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold',
+                            isExpiring ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
+                            {isExpiring ? 'Expiring' : 'Active'}
+                          </span>
+                          {c.autoRenew && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">Auto-Renew</span>}
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800">{c.type}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{c.start} → {c.end} · ${c.value.toLocaleString()}/yr</p>
+                        <p className="text-[11px] text-slate-500 mt-1">{c.scope}</p>
+                      </div>
+                      {!isRenewing && (isExpiring || isActive) && (
+                        <button onClick={() => handleRenew(c)}
+                          className={clsx('flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
+                            isExpiring ? 'bg-amber-600 text-white hover:bg-amber-700' : 'border border-slate-200 text-slate-600 hover:bg-slate-100')}>
+                          {isExpiring ? 'Renew Now' : 'Renew'}
+                        </button>
+                      )}
+                    </div>
+                    {isRenewing && (
+                      <div className="border-t border-slate-100 pt-3 space-y-2">
+                        <p className="text-xs font-semibold text-slate-600">Renew Contract</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] text-slate-400 mb-1">New Expiry Date *</label>
+                            <input type="date" value={renewForm.newEnd} onChange={e => setRenewForm(p => ({ ...p, newEnd: e.target.value }))}
+                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400"/>
+                          </div>
+                          <div className="flex items-end gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer pb-1.5">
+                              <input type="checkbox" checked={renewForm.autoRenew} onChange={e => setRenewForm(p => ({ ...p, autoRenew: e.target.checked }))} className="accent-navy-600"/>
+                              <span className="text-xs text-slate-600">Auto-renew</span>
+                            </label>
+                          </div>
+                          <div className="col-span-2">
+                            <label className="block text-[11px] text-slate-400 mb-1">Notes (optional)</label>
+                            <input value={renewForm.notes} onChange={e => setRenewForm(p => ({ ...p, notes: e.target.value }))}
+                              placeholder="Rate change, scope update…"
+                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400"/>
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button onClick={() => setRenewingId(null)} className="px-3 py-1 text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+                          <button onClick={() => confirmRenew(c)} disabled={!renewForm.newEnd}
+                            className="px-4 py-1 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 disabled:opacity-40 transition-colors">
+                            Confirm Renewal
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="pt-2">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl hover:border-navy-300 hover:text-navy-600 hover:bg-navy-50 transition-colors">
+                  <Plus size={12}/>Add Contract
+                </button>
               </div>
             </div>
           )}
@@ -439,25 +551,239 @@ function VendorCommsModal({ vendor, onClose }) {
 }
 
 const MOCK_VENDORS = [
-  { id:1, name:'Greenscape Landscaping', category:'Landscaping',       contractExp:'Dec 31, 2025', coiStatus:'valid',    w9:true, annualSpend:50400 },
-  { id:2, name:'AquaCare Pool Services', category:'Pool & Spa',         contractExp:'Jun 30, 2025', coiStatus:'expiring', w9:true, annualSpend:21600, coiExp:'May 20' },
-  { id:3, name:'ProPlumb Emergency',     category:'Plumbing',           contractExp:'Ongoing',      coiStatus:'valid',    w9:true, annualSpend:18400 },
-  { id:4, name:'SecureWatch Security',   category:'Security',           contractExp:'Sep 30, 2025', coiStatus:'expiring', w9:true, annualSpend:38400, coiExp:'May 14' },
-  { id:5, name:'PaintRight Contractors', category:'Painting & General', contractExp:'Project-based',coiStatus:'valid',    w9:true, annualSpend:12000 },
-  { id:6, name:'Metro Collection Group', category:'Collections',        contractExp:'Ongoing',      coiStatus:'valid',    w9:true, annualSpend:4200  },
-  { id:7, name:'SecureLock Inc.',        category:'Locksmith & Gates',  contractExp:'Ongoing',      coiStatus:'valid',    w9:true, annualSpend:6800  },
+  { id:1, name:'Greenscape Landscaping', category:'Landscaping',       address:'840 Garden Way, Sacramento, CA 95814', phone:'(916) 555-0301', email:'accounts@greenscape.com',   website:'www.greenscape.com',   contactName:'Marcus Webb',    contactTitle:'Account Manager',  businessLicense:'BL-2019-04821', ein:'47-2381940', contractStart:'Jan 1, 2025',  contractExp:'Dec 31, 2025', coiStatus:'valid',    coiExp:null,      w9:true, annualSpend:50400, notes:'Preferred landscaping vendor for 6 years. Includes 4 monthly visits and seasonal plantings.' },
+  { id:2, name:'AquaCare Pool Services', category:'Pool & Spa',        address:'220 Blue Lagoon Dr, Elk Grove, CA 95624', phone:'(916) 555-0402', email:'billing@aquacare.com',    website:'www.aquacare.net',     contactName:'Sandra Ho',      contactTitle:'Client Relations', businessLicense:'BL-2021-11203', ein:'83-4729201', contractStart:'Jul 1, 2024',  contractExp:'Jun 30, 2025', coiStatus:'expiring', coiExp:'May 20',  w9:true, annualSpend:21600, notes:'COI renewal in progress. Bi-weekly pool maintenance, chemical balancing and filter cleaning.' },
+  { id:3, name:'ProPlumb Emergency',     category:'Plumbing',          address:'1175 Pipe Ave, Rancho Cordova, CA 95670', phone:'(916) 555-0503', email:'service@proplumb.com',    website:'www.proplumb.com',     contactName:'Derek Vance',    contactTitle:'Dispatch Manager', businessLicense:'BL-2018-09374', ein:'56-1038472', contractStart:'Jan 1, 2025',  contractExp:'Ongoing',      coiStatus:'valid',    coiExp:null,      w9:true, annualSpend:18400, notes:'On-call 24/7 emergency plumbing. Billed per service call. Response time SLA: 90 minutes.' },
+  { id:4, name:'SecureWatch Security',   category:'Security',          address:'4501 Shield Blvd, Sacramento, CA 95823', phone:'(916) 555-0604', email:'ops@securewatch.com',     website:'www.securewatch.com',  contactName:'Linda Okafor',   contactTitle:'Operations Lead',  businessLicense:'BL-2020-05512', ein:'29-8834710', contractStart:'Oct 1, 2024',  contractExp:'Sep 30, 2025', coiStatus:'expiring', coiExp:'May 14',  w9:true, annualSpend:38400, notes:'24/7 on-site guard + 12-camera monitoring. COI renewal overdue — follow up immediately.' },
+  { id:5, name:'PaintRight Contractors', category:'Painting & General',address:'77 Brush St, West Sacramento, CA 95691', phone:'(916) 555-0705', email:'projects@paintright.com', website:'www.paintright.biz',   contactName:'Tommy Reyes',    contactTitle:'Project Lead',     businessLicense:'BL-2022-14490', ein:'61-7203845', contractStart:'Mar 1, 2026',  contractExp:'Project-based',coiStatus:'valid',    coiExp:null,      w9:true, annualSpend:12000, notes:'Current project: Building A exterior repaint. Est. completion June 2026.' },
+  { id:6, name:'Metro Collection Group', category:'Collections',       address:'900 Debt Row, Folsom, CA 95630',         phone:'(916) 555-0806', email:'hoa@metrocollect.com',   website:'www.metrocollect.com', contactName:'Joyce Patton',   contactTitle:'HOA Specialist',   businessLicense:'BL-2021-08831', ein:'72-5590134', contractStart:'Jan 1, 2025',  contractExp:'Ongoing',      coiStatus:'valid',    coiExp:null,      w9:true, annualSpend:4200,  notes:'Contingency-based: 15% of collected amount. Handles accounts 90+ days delinquent.' },
+  { id:7, name:'SecureLock Inc.',        category:'Locksmith & Gates', address:'310 Key Ct, Sacramento, CA 95841',       phone:'(916) 555-0907', email:'service@securelock.com', website:'www.securelock.com',   contactName:'Brian Falco',    contactTitle:'Service Director', businessLicense:'BL-2023-19203', ein:'38-4401927', contractStart:'Jan 1, 2025',  contractExp:'Ongoing',      coiStatus:'valid',    coiExp:null,      w9:true, annualSpend:6800,  notes:'FOB programming, gate motor maintenance, emergency lockout response. 2-hr SLA.' },
 ];
+
+const MOCK_CONTRACTS = {
+  1: [
+    { id:'c1-1', type:'Annual Landscaping Maintenance', start:'Jan 1, 2025',  end:'Dec 31, 2025', value:50400, status:'expiring', scope:'Weekly mowing, edging, trimming, seasonal plantings — 4 visits/month', autoRenew:true },
+    { id:'c1-2', type:'Irrigation System Maintenance',  start:'Mar 1, 2025',  end:'Feb 28, 2026', value:8400,  status:'active',   scope:'Monthly irrigation inspection, adjustment and minor repairs', autoRenew:false },
+  ],
+  2: [
+    { id:'c2-1', type:'Pool & Spa Service Contract',    start:'Jul 1, 2024',  end:'Jun 30, 2025', value:21600, status:'expiring', scope:'Bi-weekly pool maintenance, chemical balancing, filter cleaning, 8 visits/month', autoRenew:false },
+  ],
+  3: [
+    { id:'c3-1', type:'On-Call Emergency Plumbing',     start:'Jan 1, 2025',  end:'Ongoing',      value:18400, status:'active',   scope:'24/7 emergency plumbing services, billed per call, 90-min response SLA', autoRenew:true },
+  ],
+  4: [
+    { id:'c4-1', type:'Security Guard Services',        start:'Oct 1, 2024',  end:'Sep 30, 2025', value:38400, status:'expiring', scope:'24/7 on-site guard, incident reporting, visitor log management', autoRenew:false },
+    { id:'c4-2', type:'Camera System Monitoring',       start:'Oct 1, 2024',  end:'Sep 30, 2025', value:6000,  status:'expiring', scope:'Remote monitoring of 12 cameras, clip retention 30 days, immediate alert on incident', autoRenew:false },
+  ],
+  5: [
+    { id:'c5-1', type:'Exterior Painting — Building A', start:'Mar 1, 2026', end:'Project-based', value:12000, status:'active',   scope:'Full exterior repaint Building A, 3-coat elastomeric, est. 8-week project', autoRenew:false },
+  ],
+  6: [
+    { id:'c6-1', type:'Collections Services Agreement', start:'Jan 1, 2025',  end:'Ongoing',      value:4200,  status:'active',   scope:'Delinquent dues collection, 15% contingency fee, accounts 90+ days past due', autoRenew:true },
+  ],
+  7: [
+    { id:'c7-1', type:'Locksmith & Gate Maintenance',   start:'Jan 1, 2025',  end:'Ongoing',      value:6800,  status:'active',   scope:'FOB programming, gate motor PM quarterly, emergency lockout response 2-hr SLA', autoRenew:true },
+  ],
+};
+
+const VENDOR_CATEGORIES = ['Landscaping','Pool & Spa','Plumbing','Security','Painting & General','Collections','Locksmith & Gates','Electrical','HVAC','Elevator','Roofing','Cleaning','Other'];
+
+function AddVendorModal({ onClose, onSave }) {
+  const [form, setForm] = useState({
+    name:'', category:'', address:'', phone:'', email:'', website:'',
+    contactName:'', contactTitle:'', businessLicense:'', ein:'',
+    coiStatus:'valid', coiExp:'', w9:false,
+    contractStart:'', contractExp:'', annualSpend:'', notes:'',
+  });
+  const [contractDoc, setContractDoc] = useState(null);
+  const [errors, setErrors] = useState({});
+  const contractDocRef = useRef(null);
+
+  const f = k => v => setForm(p => ({ ...p, [k]: v }));
+  const inp = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
+  const lbl = 'block text-xs font-medium text-slate-500 mb-1';
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = 'Required';
+    if (!form.category) e.category = 'Required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    onSave({ ...form, annualSpend: parseFloat(form.annualSpend) || 0, contractDoc });
+    onClose();
+  };
+
+  const handleContractDoc = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setContractDoc({ name: file.name, size: file.size, dataUrl: ev.target.result });
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const SectionTitle = ({ children }) => (
+    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3 mt-1">{children}</p>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-base font-bold text-slate-900">Add New Vendor</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><XIcon size={16}/></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Company */}
+          <div>
+            <SectionTitle>Company Information</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className={lbl}>Company Name *</label>
+                <input value={form.name} onChange={e => f('name')(e.target.value)} className={clsx(inp, errors.name && 'border-rose-300')} placeholder="e.g. Greenscape Landscaping"/>
+                {errors.name && <p className="text-[11px] text-rose-500 mt-1">{errors.name}</p>}
+              </div>
+              <div>
+                <label className={lbl}>Category *</label>
+                <select value={form.category} onChange={e => f('category')(e.target.value)} className={clsx(inp, errors.category && 'border-rose-300')}>
+                  <option value="">Select category…</option>
+                  {VENDOR_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+                {errors.category && <p className="text-[11px] text-rose-500 mt-1">{errors.category}</p>}
+              </div>
+              <div>
+                <label className={lbl}>Phone</label>
+                <input value={form.phone} onChange={e => f('phone')(e.target.value)} className={inp} placeholder="(555) 000-0000"/>
+              </div>
+              <div className="col-span-2">
+                <label className={lbl}>Address</label>
+                <input value={form.address} onChange={e => f('address')(e.target.value)} className={inp} placeholder="123 Main St, City, CA 90001"/>
+              </div>
+              <div>
+                <label className={lbl}>Email</label>
+                <input type="email" value={form.email} onChange={e => f('email')(e.target.value)} className={inp} placeholder="billing@vendor.com"/>
+              </div>
+              <div>
+                <label className={lbl}>Website</label>
+                <input value={form.website} onChange={e => f('website')(e.target.value)} className={inp} placeholder="www.vendor.com"/>
+              </div>
+            </div>
+          </div>
+          {/* Contact */}
+          <div>
+            <SectionTitle>Primary Contact</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={lbl}>Contact Name</label>
+                <input value={form.contactName} onChange={e => f('contactName')(e.target.value)} className={inp} placeholder="Jane Smith"/>
+              </div>
+              <div>
+                <label className={lbl}>Title / Role</label>
+                <input value={form.contactTitle} onChange={e => f('contactTitle')(e.target.value)} className={inp} placeholder="Account Manager"/>
+              </div>
+            </div>
+          </div>
+          {/* Legal */}
+          <div>
+            <SectionTitle>Legal & Compliance</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={lbl}>Business License #</label>
+                <input value={form.businessLicense} onChange={e => f('businessLicense')(e.target.value)} className={inp} placeholder="BL-2025-XXXXX"/>
+              </div>
+              <div>
+                <label className={lbl}>Tax ID / EIN</label>
+                <input value={form.ein} onChange={e => f('ein')(e.target.value)} className={inp} placeholder="XX-XXXXXXX"/>
+              </div>
+              <div>
+                <label className={lbl}>COI Status</label>
+                <select value={form.coiStatus} onChange={e => f('coiStatus')(e.target.value)} className={inp}>
+                  <option value="valid">Valid</option>
+                  <option value="expiring">Expiring Soon</option>
+                  <option value="expired">Expired</option>
+                  <option value="none">None on File</option>
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>COI Expiry Date</label>
+                <input type="date" value={form.coiExp} onChange={e => f('coiExp')(e.target.value)} className={inp}/>
+              </div>
+              <div className="col-span-2 flex items-center gap-2 py-1">
+                <input type="checkbox" id="w9chk" checked={form.w9} onChange={e => f('w9')(e.target.checked)} className="w-4 h-4 accent-navy-600 flex-shrink-0"/>
+                <label htmlFor="w9chk" className="text-sm text-slate-700 cursor-pointer">W-9 on file</label>
+              </div>
+            </div>
+          </div>
+          {/* Contract */}
+          <div>
+            <SectionTitle>Contract Details</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={lbl}>Contract Start Date</label>
+                <input type="date" value={form.contractStart} onChange={e => f('contractStart')(e.target.value)} className={inp}/>
+              </div>
+              <div>
+                <label className={lbl}>Contract Expiry Date</label>
+                <input type="date" value={form.contractExp} onChange={e => f('contractExp')(e.target.value)} className={inp}/>
+              </div>
+              <div>
+                <label className={lbl}>Estimated Annual Spend ($)</label>
+                <input type="number" min="0" value={form.annualSpend} onChange={e => f('annualSpend')(e.target.value)} className={inp} placeholder="0.00"/>
+              </div>
+              <div className="flex flex-col justify-end">
+                <input ref={contractDocRef} type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={handleContractDoc}/>
+                <button type="button" onClick={() => contractDocRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-slate-600 border border-slate-200 rounded-lg hover:border-navy-300 hover:bg-navy-50 transition-colors">
+                  <Paperclip size={11}/>{contractDoc ? contractDoc.name : 'Attach Contract Document (PDF)'}
+                </button>
+                {contractDoc && <p className="text-[11px] text-slate-400 mt-1">{(contractDoc.size/1024).toFixed(0)} KB attached</p>}
+              </div>
+              <div className="col-span-2">
+                <label className={lbl}>Notes</label>
+                <textarea value={form.notes} onChange={e => f('notes')(e.target.value)} rows={3} className={inp + ' resize-none'} placeholder="Scope of work, special terms, or reminders…"/>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex-shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-xs text-slate-500 rounded-lg hover:bg-slate-100 transition-colors">Cancel</button>
+          <button onClick={handleSave} className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 transition-colors">
+            <Plus size={12}/>Add Vendor
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Vendors() {
   const { data: list } = useQuery({ queryKey:['vendors'], queryFn:()=>vendorAPI.list(1).then(r=>r.data), placeholderData:MOCK_VENDORS });
-  const vendors = list || MOCK_VENDORS;
+  const [extra, setExtra] = useState([]);
+  const baseVendors = list?.length ? list : MOCK_VENDORS;
+  const vendors = [...extra, ...baseVendors];
   const expiring = vendors.filter(v=>v.coiStatus==='expiring').length;
   const [selectedVendor, setSelectedVendor] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+
+  const handleAddVendor = data => {
+    const v = { id: Date.now(), name: data.name, category: data.category, address: data.address,
+      phone: data.phone, email: data.email, website: data.website,
+      contactName: data.contactName, contactTitle: data.contactTitle,
+      businessLicense: data.businessLicense, ein: data.ein,
+      contractStart: data.contractStart, contractExp: data.contractExp || 'Ongoing',
+      coiStatus: data.coiStatus, coiExp: data.coiExp || null,
+      w9: data.w9, annualSpend: data.annualSpend || 0, notes: data.notes, contractDoc: data.contractDoc };
+    setExtra(prev => [v, ...prev]);
+  };
 
   return (
     <div className="page-enter">
       <SectionHeader title="Vendors" subtitle="Contract management, COI tracking, and 1099 compliance"
-        action={<Button variant="primary" size="sm"><Plus size={12}/>Add Vendor</Button>} />
+        action={<Button variant="primary" size="sm" onClick={() => setShowAdd(true)}><Plus size={12}/>Add Vendor</Button>} />
       {expiring > 0 && <Alert variant="danger" title={`${expiring} vendor COIs expiring within 30 days`}>Renew before contracts can be extended.</Alert>}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <MetricCard label="Active Vendors"      value={vendors.length} />
@@ -487,6 +813,7 @@ export function Vendors() {
           </Table>
         </div>
       </Card>
+      {showAdd && <AddVendorModal onClose={() => setShowAdd(false)} onSave={handleAddVendor} />}
       {selectedVendor && <VendorCommsModal vendor={selectedVendor} onClose={() => setSelectedVendor(null)} />}
     </div>
   );
