@@ -332,6 +332,112 @@ export function Maintenance() {
 // ─── Vendors ──────────────────────────────────────────────────────────────────
 import { vendorAPI } from '../lib/api';
 
+function VendorCommsModal({ vendor, onClose }) {
+  const [activeTab, setActiveTab] = useState('details');
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [composeSent, setComposeSent] = useState(false);
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  const vendorEmails = MOCK_INBOX.filter(e => e.fromType === 'vendor' && e.from === vendor.name);
+
+  const handleComposeSend = () => {
+    if (!composeSubject.trim() || !composeBody.trim()) return;
+    const msg = {
+      id: Date.now(),
+      subject: composeSubject,
+      body: composeBody,
+      type: 'vendor',
+      sent: vendor.name,
+      channel: 'Email',
+      date: today,
+      openRate: null,
+    };
+    lsSaveComm(msg);
+    setComposeSent(true);
+    setComposeSubject('');
+    setComposeBody('');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">{vendor.name}</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{vendor.category}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><XIcon size={16}/></button>
+        </div>
+        {/* Tabs */}
+        <div className="flex gap-1 px-6 pt-3 pb-0 border-b border-slate-100">
+          {['details','communications'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={clsx('px-3 py-1.5 text-xs font-medium rounded-t-lg transition-colors capitalize',
+                activeTab === tab ? 'bg-navy-600 text-white' : 'text-slate-500 hover:bg-slate-100')}>
+              {tab}
+            </button>
+          ))}
+        </div>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {activeTab === 'details' && (
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: 'Category',       value: vendor.category },
+                  { label: 'Contract Expiry', value: vendor.contractExp },
+                  { label: 'COI Status',      value: vendor.coiStatus === 'valid' ? 'Valid' : `Expiring${vendor.coiExp ? ` — ${vendor.coiExp}` : ''}` },
+                  { label: 'W-9 on File',    value: vendor.w9 ? 'Yes' : 'No' },
+                  { label: 'Annual Spend',   value: `$${(vendor.annualSpend || 0).toLocaleString()}` },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-slate-50 rounded-xl p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-0.5">{label}</p>
+                    <p className="text-sm font-semibold text-slate-800">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {activeTab === 'communications' && (
+            <div>
+              {vendorEmails.length === 0 ? (
+                <div className="px-6 py-8 text-center text-sm text-slate-400">No communications on file for this vendor.</div>
+              ) : (
+                vendorEmails.map(e => (
+                  <InboxEmailRow key={e.id} email={e} onReplyAdded={() => {}} />
+                ))
+              )}
+              {/* Compose section */}
+              <div className="px-6 py-5 border-t border-slate-100">
+                <p className="text-xs font-semibold text-slate-600 mb-3">Send to Vendor</p>
+                <div className="space-y-2">
+                  <input value={composeSubject} onChange={e => setComposeSubject(e.target.value)}
+                    placeholder="Subject…"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all"/>
+                  <textarea value={composeBody} onChange={e => setComposeBody(e.target.value)}
+                    placeholder="Message…" rows={5}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all resize-y font-mono"/>
+                  <div className="flex items-center justify-between">
+                    {composeSent && <span className="text-xs text-emerald-600 font-medium">Sent ✓</span>}
+                    <div className="ml-auto">
+                      <button onClick={handleComposeSend} disabled={!composeSubject.trim() || !composeBody.trim()}
+                        className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 transition-colors disabled:opacity-40">
+                        <Send size={11}/>Send to Vendor
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const MOCK_VENDORS = [
   { id:1, name:'Greenscape Landscaping', category:'Landscaping',       contractExp:'Dec 31, 2025', coiStatus:'valid',    w9:true, annualSpend:50400 },
   { id:2, name:'AquaCare Pool Services', category:'Pool & Spa',         contractExp:'Jun 30, 2025', coiStatus:'expiring', w9:true, annualSpend:21600, coiExp:'May 20' },
@@ -346,6 +452,7 @@ export function Vendors() {
   const { data: list } = useQuery({ queryKey:['vendors'], queryFn:()=>vendorAPI.list(1).then(r=>r.data), placeholderData:MOCK_VENDORS });
   const vendors = list || MOCK_VENDORS;
   const expiring = vendors.filter(v=>v.coiStatus==='expiring').length;
+  const [selectedVendor, setSelectedVendor] = useState(null);
 
   return (
     <div className="page-enter">
@@ -374,12 +481,13 @@ export function Vendors() {
                 </Td>
                 <Td><Badge variant={v.w9?'green':'red'}>{v.w9?'On file':'Missing'}</Badge></Td>
                 <Td className="font-semibold">${(v.annualSpend/1000).toFixed(1)}K</Td>
-                <Td><div className="flex gap-1.5"><Button variant="ghost" size="sm">View</Button>{v.coiStatus==='expiring'&&<Button variant="danger" size="sm">Renew COI</Button>}</div></Td>
+                <Td><div className="flex gap-1.5"><Button variant="ghost" size="sm" onClick={() => setSelectedVendor(v)}>View</Button>{v.coiStatus==='expiring'&&<Button variant="danger" size="sm">Renew COI</Button>}</div></Td>
               </Tr>
             ))}</tbody>
           </Table>
         </div>
       </Card>
+      {selectedVendor && <VendorCommsModal vendor={selectedVendor} onClose={() => setSelectedVendor(null)} />}
     </div>
   );
 }
@@ -1583,26 +1691,46 @@ export function Communications() {
             </div>
           </div>
         </Card>
-        <Card padding={false}>
-          <div className="px-5 py-4 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-700">Recent Communications</h3></div>
-          {comms.map(c => (
-            <div key={c.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1.5"><Badge variant={commTypeMap[c.type]||'gray'}>{c.type}</Badge></div>
-                  <p className="text-sm font-medium text-slate-800 truncate">{c.subject}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{c.sent} · {c.channel} · {c.date}</p>
-                  {c.attachments?.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {c.attachments.map(a => <AttachmentChip key={a.id} file={a} />)}
-                    </div>
-                  )}
-                </div>
-                {c.openRate&&<div className="text-right flex-shrink-0"><p className="text-sm font-bold text-emerald-600">{c.openRate}%</p><p className="text-[10px] text-slate-400">opened</p></div>}
+        <div className="space-y-4">
+          {/* Inbox section */}
+          <Card padding={false}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MailOpen size={14} className="text-slate-400"/>
+                <h3 className="text-sm font-semibold text-slate-700">Inbox — Received from Vendors &amp; Residents</h3>
               </div>
+              {inbox.filter(e => !e.read).length > 0 && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                  {inbox.filter(e => !e.read).length} unread
+                </span>
+              )}
             </div>
-          ))}
-        </Card>
+            {inbox.map(e => (
+              <InboxEmailRow key={e.id} email={e} onReplyAdded={msg => setExtra(prev => [msg, ...prev])} />
+            ))}
+          </Card>
+          {/* Sent section */}
+          <Card padding={false}>
+            <div className="px-5 py-4 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-700">Sent Communications</h3></div>
+            {comms.map(c => (
+              <div key={c.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5"><Badge variant={commTypeMap[c.type]||'gray'}>{c.type}</Badge></div>
+                    <p className="text-sm font-medium text-slate-800 truncate">{c.subject}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{c.sent} · {c.channel} · {c.date}</p>
+                    {c.attachments?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {c.attachments.map(a => <AttachmentChip key={a.id} file={a} />)}
+                      </div>
+                    )}
+                  </div>
+                  {c.openRate&&<div className="text-right flex-shrink-0"><p className="text-sm font-bold text-emerald-600">{c.openRate}%</p><p className="text-[10px] text-slate-400">opened</p></div>}
+                </div>
+              </div>
+            ))}
+          </Card>
+        </div>
       </div>
     </div>
   );
