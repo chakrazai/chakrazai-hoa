@@ -1637,110 +1637,171 @@ function StatementsTab({ election, role, onUpdate, addAudit }) {
 
 // ─── Envelopes Tab ────────────────────────────────────────────────────────────
 function ElectronicBallotPanel({ residents, election, addAudit }) {
-  const eligible       = residents.filter(r => r.isOwnerResident !== false);
-  const electronic     = eligible.filter(r => r.electronicVoting);
-  const paper          = eligible.filter(r => !r.electronicVoting);
+  const eligible    = residents.filter(r => r.isOwnerResident !== false);
+  const electronic  = eligible.filter(r => r.electronicVoting);
+  const paper       = eligible.filter(r => !r.electronicVoting);
   const [sent, setSent] = useState({});
+
+  // Build printable ballot HTML for a single recipient (physical or electronic preview)
+  const buildBallotHTML = (recipient) => {
+    const maxVotes = election.seatsAvailable || 1;
+    const candidateRows = (election.candidates || []).filter(c => !c.disqualified).map(c => `
+      <div class="candidate">
+        <div class="bubble"></div>
+        <div>
+          <div class="cand-name">${c.name}${c.unit ? ` — Unit ${c.unit}` : ''}</div>
+          ${c.bio ? `<div class="cand-bio">${c.bio}</div>` : ''}
+        </div>
+      </div>`).join('');
+    return `<!DOCTYPE html><html><head><title>${election.title} — Official Ballot</title>
+      <style>
+        body{font-family:Georgia,serif;max-width:580px;margin:40px auto;padding:20px;color:#1e293b}
+        .header{background:#1e293b;color:white;padding:20px 24px;text-align:center;border-radius:4px 4px 0 0}
+        .header .super{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#94a3b8}
+        .header h1{font-size:13px;font-weight:700;margin:4px 0;color:#e2e8f0}
+        .header h2{font-size:17px;font-weight:900;margin:2px 0}
+        .header .dates{font-size:10px;color:#94a3b8;margin-top:4px}
+        .recipient{background:#f0f9ff;border-bottom:2px solid #0284c7;padding:8px 24px;font-size:11px;color:#0c4a6e}
+        .instruct{background:#fffbeb;border-bottom:2px solid #f59e0b;padding:12px 24px}
+        .instruct .lbl{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#92400e}
+        .instruct p{font-size:11px;color:#78350f;margin:4px 0 0;line-height:1.5}
+        .body{padding:20px 24px;border:2px solid #1e293b;border-top:none}
+        .sect{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:16px}
+        .candidate{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px dotted #cbd5e1}
+        .bubble{width:20px;height:20px;border-radius:50%;border:2px solid #1e293b;flex-shrink:0;margin-top:2px}
+        .cand-name{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+        .cand-bio{font-size:10px;color:#64748b;font-style:italic;margin-top:3px}
+        .footer{background:#f8fafc;border:2px solid #1e293b;border-top:none;border-radius:0 0 4px 4px;padding:12px 24px;font-size:9px;color:#94a3b8;text-align:center}
+        @media print{body{margin:0}}
+      </style></head><body>
+      <div class="header">
+        <div class="super">Official Ballot</div>
+        <h1>Oakwood Estates Homeowners Association</h1>
+        <h2>${election.title}</h2>
+        <div class="dates">Voting Period: ${election.startDate || '—'} – ${election.endDate || '—'}</div>
+      </div>
+      ${recipient ? `<div class="recipient">Issued to: <strong>${recipient.name}</strong> — Unit ${recipient.unit}</div>` : ''}
+      <div class="instruct">
+        <div class="lbl">Voting Instructions</div>
+        <p>${election.ballotInstructions || `Vote for up to ${maxVotes} candidate${maxVotes > 1 ? 's' : ''}. Mark the oval completely next to your choice.`}</p>
+      </div>
+      <div class="body">
+        <div class="sect">Vote for up to ${maxVotes} candidate${maxVotes > 1 ? 's' : ''}</div>
+        ${candidateRows || '<p style="color:#94a3b8;font-style:italic">No candidates added yet.</p>'}
+      </div>
+      <div class="footer">Civil Code § 5105 · Secret ballot · Do not mark identifying information inside this envelope</div>
+    </body></html>`;
+  };
+
+  const printBallot = (recipient) => {
+    const w = window.open('', '_blank', 'width=700,height=900');
+    w.document.write(buildBallotHTML(recipient));
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  };
+
+  const printAllPhysical = () => {
+    const w = window.open('', '_blank', 'width=700,height=1100');
+    const pages = paper.map(r => buildBallotHTML(r).replace(/<\/body><\/html>$/, '') + '<div style="page-break-after:always"></div></body></html>');
+    w.document.write(pages[0]);
+    w.document.close();
+    setTimeout(() => w.print(), 600);
+  };
 
   const sendBallot = (r) => {
     setSent(p => ({ ...p, [r.unit]: new Date().toLocaleString() }));
-    if (addAudit) addAudit(
-      'Electronic Ballot Sent',
-      `Electronic ballot sent to ${r.name} (Unit ${r.unit}) at ${r.email}. Civil Code § 5105.`,
-      'blue'
-    );
+    if (addAudit) addAudit('Electronic Ballot Sent', `Electronic ballot sent to ${r.name} (Unit ${r.unit}) at ${r.email}. Civil Code § 5105.`, 'blue');
   };
+
   const sendAll = () => {
     const now = new Date().toLocaleString();
     const updates = {};
     electronic.filter(r => !sent[r.unit]).forEach(r => { updates[r.unit] = now; });
     setSent(p => ({ ...p, ...updates }));
-    if (addAudit && Object.keys(updates).length > 0) addAudit(
-      'Electronic Ballots Sent (Batch)',
-      `Electronic ballots sent to ${Object.keys(updates).length} opted-in member(s). Civil Code § 5105.`,
-      'blue'
-    );
+    if (addAudit && Object.keys(updates).length > 0) addAudit('Electronic Ballots Sent (Batch)', `Electronic ballots sent to ${Object.keys(updates).length} opted-in member(s). Civil Code § 5105.`, 'blue');
   };
 
   const sentCount = electronic.filter(r => sent[r.unit]).length;
 
   return (
-    <div className="mb-6">
-      {/* Summary banner */}
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl mb-3">
-        <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-2">
-          Electronic Voting — Civil Code § 5105 (AB 2159)
-        </p>
-        <p className="text-[11px] text-blue-700 mb-3">
-          Members who affirmatively opted in receive ballots electronically. All other eligible members receive physical mail ballot packages. Opt-in preference is managed in each resident's profile.
-        </p>
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="bg-white rounded-lg p-2 text-center border border-blue-100">
-            <p className="text-lg font-bold text-blue-700">{electronic.length}</p>
-            <p className="text-[10px] text-slate-500">Electronic (opted in)</p>
-          </div>
-          <div className="bg-white rounded-lg p-2 text-center border border-slate-100">
-            <p className="text-lg font-bold text-slate-700">{paper.length}</p>
-            <p className="text-[10px] text-slate-500">Physical mail ballot</p>
-          </div>
-          <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
-            <p className="text-lg font-bold text-emerald-700">{sentCount}/{electronic.length}</p>
-            <p className="text-[10px] text-slate-500">Electronic sent</p>
-          </div>
+    <div className="mb-6 space-y-4">
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
+          <p className="text-xl font-bold text-blue-700">{electronic.length}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Electronic (opted in)</p>
         </div>
-        {electronic.length > 0 && sentCount < electronic.length && (
-          <Button variant="primary" size="sm" onClick={sendAll}>
-            <Send size={11}/>Send All {electronic.length - sentCount} Pending Electronic Ballots
-          </Button>
-        )}
-        {sentCount === electronic.length && electronic.length > 0 && (
-          <p className="text-xs text-emerald-700 font-semibold flex items-center gap-1"><Check size={12}/>All electronic ballots sent</p>
-        )}
+        <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-200">
+          <p className="text-xl font-bold text-slate-700">{paper.length}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Physical mail ballot</p>
+        </div>
+        <div className="bg-emerald-50 rounded-xl p-3 text-center border border-emerald-100">
+          <p className="text-xl font-bold text-emerald-700">{sentCount}/{electronic.length}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Electronic sent</p>
+        </div>
       </div>
 
-      {/* Electronic voters list */}
+      {/* ── Electronic voters ── */}
       {electronic.length > 0 && (
-        <div className="mb-4">
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-            <Tablet size={10}/>Electronic Ballot Recipients ({electronic.length})
-          </p>
-          <div className="space-y-1.5">
+        <div className="border border-blue-200 rounded-xl overflow-hidden">
+          <div className="px-3 py-2 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+            <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Tablet size={10}/>Electronic Ballot Recipients ({electronic.length})
+            </p>
+            {sentCount < electronic.length
+              ? <Button variant="primary" size="sm" onClick={sendAll}><Send size={10}/>Send All {electronic.length - sentCount} Pending</Button>
+              : <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1"><Check size={10}/>All sent</span>
+            }
+          </div>
+          <div className="divide-y divide-slate-100">
             {electronic.map(r => (
-              <div key={r.unit} className={clsx('flex items-center justify-between px-3 py-2 rounded-xl border text-xs', sent[r.unit] ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200')}>
+              <div key={r.unit} className={clsx('flex items-center justify-between px-3 py-2 text-xs', sent[r.unit] ? 'bg-emerald-50' : 'bg-white')}>
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold text-slate-800 flex-shrink-0">Unit {r.unit}</span>
+                  <span className="font-semibold text-slate-700 flex-shrink-0">Unit {r.unit}</span>
                   <span className="text-slate-600 truncate">{r.name}</span>
-                  {r.email && <span className="text-slate-400 text-[11px] truncate hidden sm:block">{r.email}</span>}
+                  {r.email && <span className="text-[10px] text-slate-400 truncate hidden sm:block">{r.email}</span>}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {sent[r.unit]
-                    ? <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1"><Check size={10}/>Sent {sent[r.unit]}</span>
-                    : <button onClick={() => sendBallot(r)}
-                        className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">
-                        <Send size={10}/>Send Ballot
-                      </button>
-                  }
-                </div>
+                {sent[r.unit]
+                  ? <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 flex-shrink-0"><Check size={9}/>Sent {sent[r.unit]}</span>
+                  : <button onClick={() => sendBallot(r)} className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-blue-50 flex-shrink-0"><Send size={9}/>Send</button>
+                }
               </div>
             ))}
+          </div>
+          <div className="px-3 py-2 bg-blue-50 border-t border-blue-100">
+            <p className="text-[10px] text-blue-700">Ballots are sent automatically to each member's email on file. No envelope or physical printing required for these members. (Civil Code § 5105)</p>
           </div>
         </div>
       )}
 
-      {/* Paper voters note */}
+      {/* ── Physical ballot voters ── */}
       {paper.length > 0 && (
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-            <Mail size={10}/>Physical Mail Ballot Required ({paper.length})
-          </p>
-          <p className="text-[11px] text-slate-500">The following members have not opted in to electronic voting and must receive a physical ballot package per Civil Code § 5105. Use the envelope printing tools below.</p>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {paper.slice(0, 12).map(r => (
-              <span key={r.unit} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-600">
-                Unit {r.unit} — {r.name}
-              </span>
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+              <Mail size={10}/>Physical Ballot Required ({paper.length})
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={printAllPhysical}>
+                <Printer size={10}/>Print All {paper.length} Ballots
+              </Button>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {paper.map(r => (
+              <div key={r.unit} className="flex items-center justify-between px-3 py-2 text-xs bg-white">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-semibold text-slate-700 flex-shrink-0">Unit {r.unit}</span>
+                  <span className="text-slate-600 truncate">{r.name}</span>
+                </div>
+                <button onClick={() => printBallot(r)} className="text-[11px] text-slate-600 hover:text-slate-800 font-medium flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-slate-100 flex-shrink-0">
+                  <Printer size={9}/>Print Ballot
+                </button>
+              </div>
             ))}
-            {paper.length > 12 && <span className="text-[10px] text-slate-400 italic">+{paper.length - 12} more</span>}
+          </div>
+          <div className="px-3 py-2 bg-slate-50 border-t border-slate-100">
+            <p className="text-[10px] text-slate-500">Print individual ballots above, then use the envelope printing tools below to generate mailing and return envelopes for these {paper.length} member(s).</p>
           </div>
         </div>
       )}
@@ -1903,7 +1964,7 @@ function EnvelopesTab({ election, role, addAudit, residents = SAMPLE_RESIDENTS }
     <div>
       <ElectronicBallotPanel residents={residents} election={election} addAudit={addAudit}/>
       <SL>Physical Ballot Envelopes</SL>
-      <p className="text-[11px] text-slate-500 mb-3">Print envelope packages for members who have <strong>not</strong> opted in to electronic voting. (Civil Code § 5115)</p>
+      <p className="text-[11px] text-slate-500 mb-3">Generate mailing and return envelopes for physical ballot recipients only. Electronic ballot members do not require envelopes. (Civil Code § 5115)</p>
       <SL>Envelope Type</SL>
       <div className="space-y-2 mb-4">
         {Object.entries(ENV_TYPES).map(([k, v]) => (

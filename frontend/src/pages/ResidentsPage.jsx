@@ -538,27 +538,39 @@ function OverviewTab({ r, onUpdate }) {
         <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 space-y-2">
           <div className="flex items-start gap-2">
             <Tablet size={14} className="text-blue-600 mt-0.5 flex-shrink-0"/>
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-blue-900">Electronic Voting (Civil Code § 5105)</p>
-              <p className="text-[11px] text-blue-700 mt-0.5">Resident must affirmatively opt in to receive and submit ballots electronically. Members who do not opt in will receive physical mail ballots. Consent is per-election and may be revoked in writing.</p>
+            <div>
+              <p className="text-xs font-semibold text-blue-900">Ballot Delivery Preference (Civil Code § 5105)</p>
+              <p className="text-[11px] text-blue-700 mt-0.5">Member must affirmatively opt in to receive ballots electronically. Consent may be revoked in writing.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="ep-ev" checked={!!draft.electronicVoting}
-              onChange={e => {
-                d('electronicVoting')(e.target.checked);
-                if (e.target.checked && !draft.electronicVotingConsentDate) {
-                  d('electronicVotingConsentDate')(new Date().toISOString().split('T')[0]);
-                }
-                if (!e.target.checked) d('electronicVotingConsentDate')('');
-              }}
-              className="w-4 h-4 rounded border-blue-300 accent-blue-600"/>
-            <label htmlFor="ep-ev" className="text-sm text-blue-900 cursor-pointer font-medium">
-              Opt in to electronic ballot delivery &amp; submission
+          <div className="space-y-2 pl-1">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="radio" name="ballotDelivery" value="physical"
+                checked={!draft.electronicVoting}
+                onChange={() => { d('electronicVoting')(false); d('electronicVotingConsentDate')(''); }}
+                className="w-4 h-4 accent-slate-600"/>
+              <div>
+                <span className="text-sm font-medium text-slate-800">Physical Ballots</span>
+                <span className="text-[11px] text-slate-400 ml-1.5">(Default)</span>
+                <p className="text-[11px] text-slate-500">Ballot package mailed to unit address</p>
+              </div>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="radio" name="ballotDelivery" value="electronic"
+                checked={!!draft.electronicVoting}
+                onChange={() => {
+                  d('electronicVoting')(true);
+                  if (!draft.electronicVotingConsentDate) d('electronicVotingConsentDate')(new Date().toISOString().split('T')[0]);
+                }}
+                className="w-4 h-4 accent-blue-600"/>
+              <div>
+                <span className="text-sm font-medium text-blue-800">Electronic Ballots</span>
+                <p className="text-[11px] text-slate-500">Ballot sent to member's email on file</p>
+              </div>
             </label>
           </div>
           {draft.electronicVoting && (
-            <div>
+            <div className="pl-1">
               <label className={fLabel}>Consent Date</label>
               <input type="date" value={draft.electronicVotingConsentDate}
                 onChange={e => d('electronicVotingConsentDate')(e.target.value)}
@@ -634,26 +646,37 @@ function OverviewTab({ r, onUpdate }) {
         </div>
       )}
 
-      {/* Electronic Voting preference */}
-      <SectionLabel>Electronic Voting (Civil Code § 5105)</SectionLabel>
-      <div className={clsx('flex items-start gap-3 py-3 px-3 rounded-xl border', r.electronicVoting ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100')}>
-        <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5', r.electronicVoting ? 'bg-blue-100' : 'bg-slate-100')}>
-          <Tablet size={13} className={r.electronicVoting ? 'text-blue-600' : 'text-slate-400'} />
+      {/* Electronic Voting preference — quick-select without entering full edit */}
+      <SectionLabel>Ballot Delivery Preference (Civil Code § 5105)</SectionLabel>
+      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+        <div className="flex items-center gap-2 mb-1">
+          <Tablet size={13} className="text-slate-400"/>
+          <p className="text-[11px] text-slate-500">Member must affirmatively opt in to receive ballots electronically. Select preference and it will be saved immediately.</p>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Ballot Delivery Preference</p>
-          {r.electronicVoting ? (
-            <>
-              <p className="text-sm font-semibold text-blue-800 mt-0.5">Electronic — Opted In</p>
-              <p className="text-[11px] text-blue-600 mt-0.5">Consent recorded {r.electronicVotingConsentDate || 'on file'}. Ballot will be delivered and submitted electronically.</p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-semibold text-slate-700 mt-0.5">Physical Mail Ballot</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Member has not opted in to electronic voting. A paper ballot package will be mailed.</p>
-            </>
-          )}
-        </div>
+        <label className={clsx('flex items-center gap-2.5 cursor-pointer px-2 py-2 rounded-lg border transition-colors', !r.electronicVoting ? 'bg-white border-slate-300 shadow-sm' : 'border-transparent hover:bg-white')}>
+          <input type="radio" name={`ballot-${r.id}`} value="physical"
+            checked={!r.electronicVoting}
+            onChange={() => onUpdate({ electronicVoting: false, electronicVotingConsentDate: '' })}
+            className="w-4 h-4 accent-slate-600 flex-shrink-0"/>
+          <div>
+            <span className="text-sm font-medium text-slate-800">Physical Ballots</span>
+            <span className="text-[11px] text-slate-400 ml-1.5">(Default)</span>
+            <p className="text-[11px] text-slate-500">Ballot package mailed to unit address</p>
+          </div>
+        </label>
+        <label className={clsx('flex items-center gap-2.5 cursor-pointer px-2 py-2 rounded-lg border transition-colors', r.electronicVoting ? 'bg-blue-50 border-blue-300 shadow-sm' : 'border-transparent hover:bg-white')}>
+          <input type="radio" name={`ballot-${r.id}`} value="electronic"
+            checked={!!r.electronicVoting}
+            onChange={() => onUpdate({ electronicVoting: true, electronicVotingConsentDate: r.electronicVotingConsentDate || new Date().toISOString().split('T')[0] })}
+            className="w-4 h-4 accent-blue-600 flex-shrink-0"/>
+          <div>
+            <span className="text-sm font-medium text-blue-800">Electronic Ballots</span>
+            <p className="text-[11px] text-slate-500">Ballot sent to {r.email || 'email on file'}</p>
+            {r.electronicVoting && r.electronicVotingConsentDate && (
+              <p className="text-[10px] text-blue-600 mt-0.5">Consent recorded {r.electronicVotingConsentDate}</p>
+            )}
+          </div>
+        </label>
       </div>
     </div>
   );
