@@ -687,7 +687,7 @@ export function DocPickerModal({ existingIds = [], onAdd, onClose }) {
 
 // ─── Communications ───────────────────────────────────────────────────────────
 import { clsx } from 'clsx';
-import { Send, Paperclip, FileText as FileIcon, X as XIcon, Image, Film, Archive } from 'lucide-react';
+import { Send, Paperclip, FileText as FileIcon, X as XIcon, Image, Film, Archive, Sparkles, Reply, MailOpen, ChevronDown as ChevDown } from 'lucide-react';
 import { useRef } from 'react';
 import { Select, Textarea } from '../components/ui';
 import { communicationsAPI } from '../lib/api';
@@ -953,6 +953,228 @@ const MOCK_COMMS = [
 ];
 const commTypeMap = { financial:'blue', compliance:'amber', board:'navy', delinquency:'red', announcement:'green' };
 
+const MOCK_INBOX = [
+  {
+    id: 'in-1',
+    from: 'Greenscape Landscaping',
+    fromEmail: 'accounts@greenscape.com',
+    fromType: 'vendor',
+    subject: 'April 2026 Service Invoice #GS-2026-041',
+    body: `Dear Oakwood Estates HOA Board,
+
+Please find attached our invoice for April 2026 landscaping services performed at Oakwood Estates.
+
+Invoice Details:
+  Invoice Number: GS-2026-041
+  Service Period:  April 1–30, 2026
+  Amount Due:      $4,200.00
+  Due Date:        May 15, 2026
+
+Services rendered include weekly lawn maintenance, edging, fertilization (spring application), irrigation system inspection, and seasonal flower bed refresh for all common areas.
+
+Please remit payment via check payable to "Greenscape Landscaping" or ACH to the account on file. A 1.5% monthly late fee applies after the due date.
+
+Thank you for the continued partnership.
+
+Warm regards,
+Marcus Webb
+Accounts Receivable
+Greenscape Landscaping
+accounts@greenscape.com | (916) 555-0182`,
+    preview: 'Please find attached our invoice for April landscaping services…',
+    date: 'May 2',
+    hasInvoice: true,
+    invoiceAmount: 4200,
+    invoiceNumber: 'GS-2026-041',
+    type: 'vendor_invoice',
+    read: false,
+  },
+  {
+    id: 'in-2',
+    from: 'AquaCare Pool Services',
+    fromEmail: 'billing@aquacare.com',
+    fromType: 'vendor',
+    subject: 'May 2026 Invoice #AQ-2026-051 + COI Renewal Notice',
+    body: `Dear HOA Board,
+
+We are writing to submit our May 2026 service invoice and to notify you of an upcoming Certificate of Insurance expiration.
+
+Invoice Details:
+  Invoice Number: AQ-2026-051
+  Service Period:  May 1–31, 2026
+  Amount Due:      $1,800.00
+  Due Date:        June 1, 2026
+
+COI Renewal Notice:
+Our current Certificate of Insurance on file with your association expires on May 20, 2026. Our carrier is processing the renewal; we expect to provide the updated certificate by May 12. If you require the certificate holder language updated, please reply with the exact text and we will pass it along to our broker.
+
+Please let us know if you have any questions about this invoice or the COI renewal.
+
+Best,
+Billing Department
+AquaCare Pool Services
+billing@aquacare.com | (916) 555-0247`,
+    preview: 'May invoice and COI expiry reminder…',
+    date: 'May 1',
+    hasInvoice: true,
+    invoiceAmount: 1800,
+    invoiceNumber: 'AQ-2026-051',
+    type: 'vendor_invoice',
+    read: false,
+  },
+  {
+    id: 'in-3',
+    from: 'ProPlumb Emergency',
+    fromEmail: 'service@proplumb.com',
+    fromType: 'vendor',
+    subject: 'Emergency Repair Invoice #PP-2026-0418 — Main Water Line',
+    body: `Dear Oakwood Estates HOA,
+
+Please find the invoice for the emergency main water line repair performed on April 18, 2026.
+
+Invoice Details:
+  Invoice Number: PP-2026-0418
+  Date of Service: April 18, 2026
+  Amount Due:      $1,840.00
+
+Breakdown:
+  Labor (4.5 hrs @ $120/hr):          $540.00
+  Materials (couplings, PVC, fittings): $680.00
+  Emergency/after-hours surcharge:      $350.00
+  Permit & inspection fee:              $270.00
+
+Work performed: Isolated and repaired 3-foot section of main supply line near building 2 crawl space. Pressure tested to 150 PSI post-repair. All work completed per local plumbing code.
+
+Payment is due within 30 days of this invoice date.
+
+Regards,
+ProPlumb Emergency Services
+service@proplumb.com | (916) 555-0319`,
+    preview: 'Invoice for emergency main water line repair April 18…',
+    date: 'Apr 19',
+    hasInvoice: true,
+    invoiceAmount: 1840,
+    invoiceNumber: 'PP-2026-0418',
+    type: 'vendor_invoice',
+    read: true,
+  },
+  {
+    id: 'in-4',
+    from: 'SecureWatch Security',
+    fromEmail: 'ops@securewatch.com',
+    fromType: 'vendor',
+    subject: 'Incident Report — Apr 28 — Vehicle Break-In near Unit 33',
+    body: `Dear Oakwood Estates HOA Board,
+
+This message serves as our formal Incident Report for the vehicle break-in event recorded near Unit 33 on April 28, 2026 at approximately 11:42 PM.
+
+Incident Summary:
+  Date/Time:    April 28, 2026 — 11:42 PM
+  Location:     Parking structure, Level 1, near Unit 33
+  Description:  Vehicle window broken, personal items removed. Responding patrol notified Sacramento PD (Case #26-0428-1183).
+
+Footage: 3-minute clip retained from Camera CAM-07. Resolution was adequate to capture the incident but insufficient for license plate identification.
+
+Camera Upgrade Proposal:
+We recommend installing 2 additional high-definition PTZ cameras to eliminate the current blind spot in the Level 1 parking area. Estimated cost: $2,400 (equipment + installation). This would provide full coverage of all 48 parking stalls.
+
+We will forward the video clip upon written request. Please advise if you wish to proceed with the camera upgrade proposal.
+
+Regards,
+Operations Team
+SecureWatch Security
+ops@securewatch.com | (916) 555-0410`,
+    preview: 'Security incident recorded near Unit 33 parking April 28…',
+    date: 'Apr 29',
+    hasInvoice: false,
+    type: 'vendor',
+    read: true,
+  },
+  {
+    id: 'in-5',
+    from: 'Greenscape Landscaping',
+    fromEmail: 'accounts@greenscape.com',
+    fromType: 'vendor',
+    subject: 'Re: March Invoice #GS-2026-031 — Payment Confirmed',
+    body: `Dear Oakwood Estates HOA Board,
+
+We are writing to confirm receipt of payment for our March 2026 invoice.
+
+Payment Details:
+  Invoice Number: GS-2026-031
+  Amount Received: $4,200.00
+  Date Received:   April 8, 2026
+  Outstanding Balance on March Services: $0.00
+
+Thank you for your prompt payment. We appreciate the continued relationship with Oakwood Estates and look forward to another great month of service in April.
+
+Please do not hesitate to reach out with any questions.
+
+Best regards,
+Marcus Webb
+Accounts Receivable
+Greenscape Landscaping
+accounts@greenscape.com`,
+    preview: 'Payment of $4,200 confirmed for March services…',
+    date: 'Apr 10',
+    hasInvoice: false,
+    type: 'vendor',
+    read: true,
+  },
+  {
+    id: 'in-6',
+    from: 'Diana Foster',
+    fromEmail: 'd.foster@email.com',
+    fromType: 'resident',
+    subject: 'Question About HOA Dues Balance — Unit 12',
+    body: `Dear HOA Board,
+
+I am writing regarding a notice I received about an outstanding balance of $150 on my account for Unit 12.
+
+I believe I may have already submitted this payment via check mailed on approximately April 1, 2026. The check was drawn on my Wells Fargo account. If the payment has not been received or posted, I am happy to provide a copy of the cancelled check as proof of payment.
+
+Could you please review my account and let me know the current status? I want to ensure this is resolved promptly and does not affect my standing with the association.
+
+Thank you for your time.
+
+Best regards,
+Diana Foster
+Unit 12 — Oakwood Estates
+d.foster@email.com`,
+    preview: 'I received a notice about an outstanding $150 balance…',
+    date: 'Apr 28',
+    hasInvoice: false,
+    type: 'resident',
+    read: false,
+  },
+  {
+    id: 'in-7',
+    from: 'Carlos Rivera',
+    fromEmail: 'c.rivera@email.com',
+    fromType: 'resident',
+    subject: 'Parking Violation Dispute — Unit 44 — April 15',
+    body: `Dear Oakwood Estates HOA Board,
+
+I am writing to formally dispute the parking violation notice and $100 fine issued to my unit (Unit 44) on April 15, 2026.
+
+I was out of town from April 12 through April 17, 2026, and therefore could not have parked in violation of any association rules during that period. I have hotel receipts and credit card statements from my travel that confirm my absence.
+
+I respectfully request that this fine be waived and removed from my account. I am available to present documentation at a hearing if required. Per California Civil Code § 5855, I understand I have the right to request a hearing within 10 days of this notice.
+
+Please confirm receipt of this dispute and advise on next steps.
+
+Sincerely,
+Carlos Rivera
+Unit 44 — Oakwood Estates
+c.rivera@email.com`,
+    preview: 'Writing to formally dispute the parking violation issued April 15…',
+    date: 'Apr 27',
+    hasInvoice: false,
+    type: 'resident',
+    read: false,
+  },
+];
+
 const catColors = { resident:'green', violation:'red', dues:'amber', board:'navy', maintenance:'blue', vendor:'purple', general:'gray' };
 
 function fileIcon(name) {
@@ -967,6 +1189,44 @@ function formatBytes(b) {
   if (b < 1024) return `${b} B`;
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function generateAiDraft(email) {
+  const sig = `Best regards,\nOakwood Estates HOA Board\nboard@oakwoodestates.org`;
+  const sub = (email.subject || '').toLowerCase();
+  const fromName = email.from || 'you';
+
+  if (email.fromType === 'vendor' && email.hasInvoice) {
+    const hasCOI = sub.includes('coi') || sub.includes('certificate') || sub.includes('insurance');
+    let body = `Dear ${fromName},\n\nThank you for submitting Invoice #${email.invoiceNumber || 'N/A'} in the amount of $${(email.invoiceAmount || 0).toLocaleString()}. We have received it and will process payment within 30 days per our standard net-30 terms.\n\n`;
+    if (hasCOI) {
+      body += `Regarding the COI renewal: please send the updated certificate to board@oakwoodestates.org with the following certificate holder information:\n\n  Oakwood Estates HOA\n  c/o Board of Directors\n  PO Box 1234, Sacramento, CA 95814\n\nPlease ensure the policy reflects a minimum of $1,000,000 in general liability coverage.\n\n`;
+    }
+    body += `Please don't hesitate to reach out if you have any questions.\n\n${sig}`;
+    return body;
+  }
+
+  if (sub.includes('coi') || sub.includes('certificate') || sub.includes('insurance')) {
+    return `Dear ${fromName},\n\nThank you for your message. Please send the updated Certificate of Insurance to board@oakwoodestates.org.\n\nCertificate holder information:\n  Oakwood Estates HOA\n  c/o Board of Directors\n  PO Box 1234, Sacramento, CA 95814\n\nPlease ensure the policy reflects a minimum of $1,000,000 in general liability coverage and names Oakwood Estates HOA as an additional insured.\n\n${sig}`;
+  }
+
+  if (sub.includes('incident') || sub.includes('report') || sub.includes('break-in')) {
+    return `Dear ${fromName},\n\nThank you for the incident report. We appreciate SecureWatch's prompt response and documentation.\n\nThe board will review the incident details and the camera upgrade proposal at our next meeting. We will follow up with a decision within 5 business days.\n\nPlease retain the video footage and forward a copy to board@oakwoodestates.org at your earliest convenience.\n\n${sig}`;
+  }
+
+  if (sub.includes('payment confirmed') || sub.includes('payment received')) {
+    return `Dear ${fromName},\n\nThank you for the payment confirmation. We appreciate your prompt communication and continued quality of service to Oakwood Estates.\n\nWe look forward to our ongoing partnership.\n\n${sig}`;
+  }
+
+  if (email.fromType === 'resident' && (sub.includes('dues') || sub.includes('balance'))) {
+    return `Dear ${fromName},\n\nThank you for reaching out. We understand your concern regarding the outstanding balance on your account.\n\nOur finance team will review your payment records within 2 business days. To assist with the investigation, please provide the following if available:\n  • Check number\n  • Date the check was mailed\n  • Copy of the cancelled check or bank statement showing the cleared payment\n\nWe will follow up with you promptly. We appreciate your cooperation in resolving this matter.\n\n${sig}`;
+  }
+
+  if (email.fromType === 'resident' && (sub.includes('violation') || sub.includes('dispute') || sub.includes('fine'))) {
+    return `Dear ${fromName},\n\nThank you for submitting your formal dispute. We have received your request and will process it in accordance with our dispute resolution procedures.\n\nPer California Civil Code § 5855, a hearing will be scheduled within 10 days of this notice. You will receive written confirmation of the hearing date and time.\n\nPlease compile any supporting documentation (receipts, photos, statements) to present at the hearing. If you have questions in the meantime, please reply to this email.\n\n${sig}`;
+  }
+
+  return `Dear ${fromName},\n\nThank you for your message. We have received your inquiry and will follow up within 2 business days.\n\nIf this matter is urgent, please call our management line at (916) 555-0100.\n\n${sig}`;
 }
 
 export function AttachmentChip({ file, onRemove }) {
@@ -1003,6 +1263,141 @@ function lsSaveComm(msg) {
   } catch {}
 }
 
+function InboxEmailRow({ email, onReplyAdded }) {
+  const [expanded, setExpanded] = useState(false);
+  const [replying, setReplying] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [replied, setReplied] = useState(false);
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  const startGenerating = (ms = 700) => {
+    setGenerating(true);
+    setTimeout(() => {
+      setDraft(generateAiDraft(email));
+      setGenerating(false);
+    }, ms);
+  };
+
+  const handleRespond = (e) => {
+    e.stopPropagation();
+    setReplying(true);
+    startGenerating(700);
+  };
+
+  const handleRegenerate = () => {
+    setDraft('');
+    startGenerating(500);
+  };
+
+  const handleSend = () => {
+    if (!draft.trim()) return;
+    const msg = {
+      id: Date.now(),
+      subject: `Re: ${email.subject}`,
+      body: draft,
+      type: email.fromType === 'vendor' ? 'vendor' : 'resident',
+      sent: email.from,
+      channel: 'Email',
+      date: today,
+      openRate: null,
+    };
+    lsSaveComm(msg);
+    setReplied(true);
+    setReplying(false);
+    if (onReplyAdded) onReplyAdded(msg);
+  };
+
+  const fromTypeBadgeClass = email.fromType === 'vendor'
+    ? 'bg-purple-100 text-purple-700 border border-purple-200'
+    : 'bg-emerald-100 text-emerald-700 border border-emerald-200';
+
+  return (
+    <div className={clsx('border-b border-slate-50 last:border-0 transition-colors', !email.read && 'bg-blue-50/40')}>
+      {/* Row header */}
+      <div className="px-5 py-3.5 flex items-start gap-3 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setExpanded(v => !v)}>
+        {/* Unread dot */}
+        <div className="flex-shrink-0 mt-1.5">
+          {!email.read && !replied
+            ? <div className="w-2 h-2 rounded-full bg-blue-500" />
+            : <div className="w-2 h-2" />
+          }
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+            <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold', fromTypeBadgeClass)}>
+              {email.fromType === 'vendor' ? 'Vendor' : 'Resident'}
+            </span>
+            {email.hasInvoice && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                Invoice ${(email.invoiceAmount || 0).toLocaleString()}
+              </span>
+            )}
+            {replied && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                Replied ✓
+              </span>
+            )}
+          </div>
+          <p className={clsx('text-sm truncate', !email.read && !replied ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>{email.subject}</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">{email.from} · {email.fromEmail} · {email.date}</p>
+          {!expanded && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{email.preview}</p>}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+          {!replied && (
+            <button onClick={handleRespond}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-navy-600 bg-navy-50 border border-navy-200 rounded-lg hover:bg-navy-100 transition-colors">
+              <Reply size={11} />Respond
+            </button>
+          )}
+          <ChevDown size={13} className={clsx('text-slate-400 transition-transform', expanded && 'rotate-180')} />
+        </div>
+      </div>
+
+      {/* Expanded body */}
+      {expanded && (
+        <div className="px-5 pb-3">
+          <pre className="text-[11px] text-slate-600 whitespace-pre-wrap font-sans bg-slate-50 rounded-lg p-3 border border-slate-100 leading-relaxed">{email.body}</pre>
+        </div>
+      )}
+
+      {/* Reply panel */}
+      {replying && (
+        <div className="px-5 pb-4 pt-1 bg-white border-t border-slate-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-slate-600">Replying to {email.from}</p>
+            <div className="flex items-center gap-2">
+              <button onClick={handleRegenerate} disabled={generating}
+                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-purple-600 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50">
+                <Sparkles size={10} />Regenerate AI Draft
+              </button>
+              <button onClick={() => setReplying(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+          {generating ? (
+            <div className="flex items-center gap-2 px-3 py-6 bg-slate-50 rounded-lg border border-slate-100">
+              <Sparkles size={14} className="text-purple-400 animate-pulse" />
+              <span className="text-xs text-slate-500 italic">Generating AI response…</span>
+            </div>
+          ) : (
+            <textarea rows={8} value={draft} onChange={e => setDraft(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all resize-y font-mono" />
+          )}
+          <div className="flex justify-end mt-2">
+            <button onClick={handleSend} disabled={generating || !draft.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-navy-700 rounded-lg hover:bg-navy-800 transition-colors disabled:opacity-40">
+              <Send size={11} />Send Reply
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Communications() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -1015,6 +1410,7 @@ export function Communications() {
   const [attachments, setAttachments] = useState([]);
   const [showDocPicker, setShowDocPicker] = useState(false);
   const [extra, setExtra] = useState(() => lsGetComms());
+  const [inbox] = useState(() => MOCK_INBOX);
   const fileInputRef = useRef(null);
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
