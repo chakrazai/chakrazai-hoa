@@ -109,13 +109,27 @@ duesRouter.post('/charge', async (req, res, next) => {
   try {
     const { communityId, residentId, amount, description } = req.body;
     await db.query(
-      `UPDATE dues_accounts SET balance = balance + $1 WHERE community_id=$2 AND resident_id=$3`,
+      `UPDATE dues_accounts SET balance = balance + $1, updated_at = NOW() WHERE community_id=$2 AND resident_id=$3`,
       [amount, communityId, residentId]
     );
+    const { rows: acc } = await db.query(
+      'SELECT balance FROM dues_accounts WHERE community_id=$1 AND resident_id=$2',
+      [communityId, residentId]
+    );
+    if (acc.length) {
+      const bal = parseFloat(acc[0].balance);
+      const st = bal <= 0 ? 'current' : bal >= 900 ? 'collections' : bal >= 300 ? 'delinquent' : 'late';
+      await db.query('UPDATE dues_accounts SET status=$1, updated_at=NOW() WHERE community_id=$2 AND resident_id=$3', [st, communityId, residentId]);
+    }
     await db.query(
       `INSERT INTO payments (resident_id, community_id, amount, method, status, note, paid_at)
-       VALUES ($1,$2,$3,'Charge','pending',$4,NOW())`,
-      [residentId, communityId, -Math.abs(amount), description]
+       VALUES ($1,$2,$3,'Charge','charge',$4,NOW())`,
+      [residentId, communityId, Math.abs(amount), description]
+    );
+    await db.query(
+      `INSERT INTO transactions (community_id, type, category, amount, description, transaction_date)
+       VALUES ($1,'income','Fob/Access Fees',$2,$3,CURRENT_DATE)`,
+      [communityId, Math.abs(amount), description]
     );
     res.json({ ok: true });
   } catch (err) { next(err); }

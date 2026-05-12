@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { residentAPI, communicationsAPI, duesAPI } from '../lib/api';
 import { getCommunityId, resolveCommunityId } from '../lib/community';
 import {
@@ -831,6 +832,7 @@ function FinancialsTab({ r, onUpdate }) {
 // ─── Tab: Parking (interactive) ───────────────────────────────────────────────
 
 function ParkingTab({ r, onUpdate }) {
+  const queryClient = useQueryClient();
   const [showCarForm, setShowCarForm] = useState(false);
   const [carDraft, setCarDraft]       = useState({ space: '', make: '', model: '', year: '', license: '' });
   const [editIdx, setEditIdx]         = useState(null);
@@ -874,8 +876,14 @@ function ParkingTab({ r, onUpdate }) {
     const newFob = { id: Date.now(), fobId: fobDraft.fobId.trim() || `GF-${String(r.id).padStart(3,'0')}${String(r.garageFobs.length + 1).padStart(2,'0')}`, status: 'active', issuedDate: fobDraft.issuedDate || today, lastUsed: '—', reason: fobDraft.reason };
     onUpdate({ garageFobs: [...r.garageFobs, newFob] });
     if (fobDraft.fee > 0) {
-      try { await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: fobDraft.fee, description: `Garage fob replacement (${fobDraft.reason === 'lost' ? 'lost' : 'damaged'}) — ${newFob.fobId}` }); }
-      catch (err) { console.error('Fee charge failed:', err); }
+      try {
+        await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: fobDraft.fee, description: `Garage fob replacement (${fobDraft.reason === 'lost' ? 'lost' : 'damaged'}) — ${newFob.fobId}` });
+        queryClient.invalidateQueries(['dues-accounts']);
+        queryClient.invalidateQueries(['dues-delinquent']);
+        queryClient.invalidateQueries(['dues-payments']);
+        queryClient.invalidateQueries(['accounting-summary']);
+        queryClient.invalidateQueries(['accounting-history']);
+      } catch (err) { console.error('Fee charge failed:', err); }
     }
     setFobDraft({ fobId: '', reason: 'hoa_assigned', fee: 0, issuedDate: '' });
     setShowFobForm(false);
@@ -1058,6 +1066,7 @@ function ParkingTab({ r, onUpdate }) {
 // ─── Tab: Access (interactive) ────────────────────────────────────────────────
 
 function AccessTab({ r, onUpdate }) {
+  const queryClient = useQueryClient();
   const [showFobForm, setShowFobForm] = useState(false);
   const [showCodeForm, setShowCodeForm] = useState(false);
   const FOB_FEES = { hoa_assigned: 0, lost: 50, damaged: 25 };
@@ -1074,8 +1083,14 @@ function AccessTab({ r, onUpdate }) {
     const newFob = { id: Date.now(), fobId: fobDraft.fobId.trim() || `CA-${String(r.id).padStart(3,'0')}${String(r.commonAreaFobs.length + 1).padStart(2,'0')}`, status: 'active', issuedDate: fobDraft.issuedDate || today, lastUsed: '—', areas: fobDraft.areas, reason: fobDraft.reason };
     onUpdate({ commonAreaFobs: [...r.commonAreaFobs, newFob] });
     if (fobDraft.fee > 0) {
-      try { await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: fobDraft.fee, description: `Common area fob replacement (${fobDraft.reason === 'lost' ? 'lost' : 'damaged'}) — ${newFob.fobId}` }); }
-      catch (err) { console.error('Fee charge failed:', err); }
+      try {
+        await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: fobDraft.fee, description: `Common area fob replacement (${fobDraft.reason === 'lost' ? 'lost' : 'damaged'}) — ${newFob.fobId}` });
+        queryClient.invalidateQueries(['dues-accounts']);
+        queryClient.invalidateQueries(['dues-delinquent']);
+        queryClient.invalidateQueries(['dues-payments']);
+        queryClient.invalidateQueries(['accounting-summary']);
+        queryClient.invalidateQueries(['accounting-history']);
+      } catch (err) { console.error('Fee charge failed:', err); }
     }
     setFobDraft({ fobId: '', reason: 'hoa_assigned', fee: 0, areas: 'Pool, Gym', issuedDate: '' });
     setShowFobForm(false);
@@ -1087,8 +1102,14 @@ function AccessTab({ r, onUpdate }) {
     const newCode = { id: Date.now(), code: codeDraft.code.trim(), areas: codeDraft.areas, status: 'active', issuedDate: codeDraft.issuedDate || today, reason: codeDraft.reason };
     onUpdate({ commonAreaCodes: [...(r.commonAreaCodes || []), newCode] });
     if (codeDraft.fee > 0) {
-      try { await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: codeDraft.fee, description: `Common area code replacement (lost) — ${codeDraft.areas}` }); }
-      catch (err) { console.error('Fee charge failed:', err); }
+      try {
+        await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: codeDraft.fee, description: `Common area code replacement (lost) — ${codeDraft.areas}` });
+        queryClient.invalidateQueries(['dues-accounts']);
+        queryClient.invalidateQueries(['dues-delinquent']);
+        queryClient.invalidateQueries(['dues-payments']);
+        queryClient.invalidateQueries(['accounting-summary']);
+        queryClient.invalidateQueries(['accounting-history']);
+      } catch (err) { console.error('Fee charge failed:', err); }
     }
     setCodeDraft({ code: '', reason: 'hoa_assigned', fee: 0, areas: 'Pool, Gym', issuedDate: '' });
     setShowCodeForm(false);

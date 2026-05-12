@@ -142,6 +142,18 @@ async function seedDues(commId) {
   } catch (err) { console.error('⚠️  Dues seed failed:', err.message); }
 }
 
+async function fixChargeRecords(commId) {
+  try {
+    // Fix any charge payments that were stored with negative amounts / old 'pending' status
+    const { rowCount } = await db.query(
+      `UPDATE payments SET amount = ABS(amount), status = 'charge'
+       WHERE community_id=$1 AND method='Charge' AND (amount < 0 OR status='pending')`,
+      [commId]
+    );
+    if (rowCount > 0) console.log(`✅ Fixed ${rowCount} charge record(s) to positive amount + status='charge'`);
+  } catch (err) { console.error('⚠️  fixChargeRecords failed:', err.message); }
+}
+
 async function seedFobEvents(commId) {
   try {
     // Seed replacement fob events for specific residents + charge fees to their dues accounts.
@@ -200,9 +212,15 @@ async function seedFobEvents(commId) {
         await db.query('UPDATE dues_accounts SET balance = balance + $1 WHERE community_id=$2 AND resident_id=$3', [ev.fee, commId, rid]);
         await db.query(
           `INSERT INTO payments (resident_id, community_id, amount, method, status, note, paid_at)
-           SELECT $1,$2,$3,'Charge','pending',$4,NOW()
-           WHERE NOT EXISTS (SELECT 1 FROM payments WHERE resident_id=$1 AND note=$4)`,
-          [rid, commId, -Math.abs(ev.fee), ev.feeDesc]
+           SELECT $1,$2,$3,'Charge','charge',$4,NOW()
+           WHERE NOT EXISTS (SELECT 1 FROM payments WHERE resident_id=$1 AND note=$4 AND method='Charge')`,
+          [rid, commId, Math.abs(ev.fee), ev.feeDesc]
+        );
+        await db.query(
+          `INSERT INTO transactions (community_id, type, category, amount, description, transaction_date)
+           SELECT $1,'income','Fob/Access Fees',$2,$3,CURRENT_DATE
+           WHERE NOT EXISTS (SELECT 1 FROM transactions WHERE community_id=$1 AND description=$3 AND type='income')`,
+          [commId, Math.abs(ev.fee), ev.feeDesc]
         );
       }
     }
@@ -592,6 +610,7 @@ async function start() {
     await seedInvoices(commId);
     await seedViolations(commId);
     await seedFobEvents(commId);
+    await fixChargeRecords(commId);
   } catch (err) {
     console.error('⚠️  Seed warning:', err.message);
   }

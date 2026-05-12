@@ -51,7 +51,7 @@ const STATUS_META = {
   delinquent:  { label:'Delinquent',  color:'red',   Icon: AlertCircle   },
   collections: { label:'Collections', color:'red',   Icon: TrendingDown  },
 };
-const PMT_MAP = { cleared:'green', processing:'blue', returned:'red' };
+const PMT_MAP = { cleared:'green', processing:'blue', returned:'red', charge:'amber' };
 const METHODS = ['ACH','Check','Credit Card','Zelle','Wire Transfer','Cash'];
 const iC = 'w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-400 transition-all';
 const lC = 'block text-xs font-medium text-slate-500 mb-1';
@@ -151,6 +151,7 @@ export default function Dues() {
   const currentCount = accs.filter(a => a.status === 'current' || !a.balance).length;
   const collectionRate = accs.length ? ((currentCount / accs.length) * 100).toFixed(1) : '94.6';
   const recentCollected = pmts.filter(p=>p.status==='cleared').reduce((s,p)=>s+parseFloat(p.amount),0);
+  const recentCharges   = pmts.filter(p=>p.status==='charge').reduce((s,p)=>s+parseFloat(p.amount),0);
 
   const filteredAccts = accs.filter(a =>
     !acctSearch || a.unit.toLowerCase().includes(acctSearch.toLowerCase()) || a.owner.toLowerCase().includes(acctSearch.toLowerCase())
@@ -272,33 +273,50 @@ export default function Dues() {
         <Card padding={false}>
           <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
             <div>
-              <h3 className="text-sm font-semibold text-slate-700">Recent Payments</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">{pmts.length} payment{pmts.length!==1?'s':''} recorded</p>
+              <h3 className="text-sm font-semibold text-slate-700">Recent Payments &amp; Charges</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {pmts.filter(p=>p.status!=='charge').length} payment{pmts.filter(p=>p.status!=='charge').length!==1?'s':''} · {pmts.filter(p=>p.status==='charge').length} fee charge{pmts.filter(p=>p.status==='charge').length!==1?'s':''}
+              </p>
             </div>
             <Button variant="primary" size="sm" onClick={() => setShowRecord(true)}><Plus size={12}/>Record Payment</Button>
           </div>
           <div className="px-5 py-1">
             <Table>
-              <thead><tr><Th>Unit</Th><Th>Owner</Th><Th>Amount</Th><Th>Method</Th><Th>Date</Th><Th>Note</Th><Th>Status</Th></tr></thead>
+              <thead><tr><Th>Unit</Th><Th>Owner</Th><Th>Amount</Th><Th>Method/Type</Th><Th>Date</Th><Th>Note</Th><Th>Status</Th></tr></thead>
               <tbody>
-                {pmts.map((p, i) => (
-                  <Tr key={p.id || i}>
-                    <Td><span className="font-semibold text-navy-700">{p.unit}</span></Td>
-                    <Td className="font-medium">{p.owner}</Td>
-                    <Td><span className="font-bold text-emerald-700">{formatCurrency(parseFloat(p.amount))}</span></Td>
-                    <Td>
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${p.method==='ACH'?'bg-blue-50 text-blue-700':p.method==='Check'?'bg-slate-100 text-slate-700':p.method==='Credit Card'?'bg-rose-50 text-rose-700':'bg-violet-50 text-violet-700'}`}>
-                        {p.method}
-                      </span>
-                    </Td>
-                    <Td className="text-slate-500 text-xs">{p.date}</Td>
-                    <Td className="text-slate-400 text-xs italic">{p.note || '—'}</Td>
-                    <Td><Badge variant={PMT_MAP[p.status]||'gray'}>{p.status==='cleared'?'Cleared':p.status==='processing'?'Processing':'Returned'}</Badge></Td>
-                  </Tr>
-                ))}
+                {pmts.map((p, i) => {
+                  const isCharge = p.status === 'charge';
+                  const methodColor = p.method==='ACH'?'bg-blue-50 text-blue-700':p.method==='Check'?'bg-slate-100 text-slate-700':p.method==='Credit Card'?'bg-rose-50 text-rose-700':isCharge?'bg-amber-50 text-amber-700':'bg-violet-50 text-violet-700';
+                  const statusLabel = p.status==='cleared'?'Cleared':p.status==='charge'?'Fee Charge':p.status==='processing'?'Processing':'Returned';
+                  return (
+                    <Tr key={p.id || i} className={isCharge ? 'bg-amber-50/30' : ''}>
+                      <Td><span className="font-semibold text-navy-700">{p.unit}</span></Td>
+                      <Td className="font-medium">{p.owner}</Td>
+                      <Td>
+                        <span className={`font-bold ${isCharge ? 'text-amber-700' : 'text-emerald-700'}`}>
+                          {isCharge ? '+' : ''}{formatCurrency(Math.abs(parseFloat(p.amount)))}
+                        </span>
+                      </Td>
+                      <Td>
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${methodColor}`}>
+                          {p.method}
+                        </span>
+                      </Td>
+                      <Td className="text-slate-500 text-xs">{p.date}</Td>
+                      <Td className="text-slate-400 text-xs italic">{p.note || '—'}</Td>
+                      <Td><Badge variant={PMT_MAP[p.status]||'gray'}>{statusLabel}</Badge></Td>
+                    </Tr>
+                  );
+                })}
               </tbody>
             </Table>
           </div>
+          {recentCharges > 0 && (
+            <div className="px-5 py-3 border-t border-slate-100 bg-amber-50/40 flex justify-between items-center">
+              <p className="text-xs text-slate-500">Fee charges billed to residents this period:</p>
+              <span className="text-sm font-bold text-amber-700">+{formatCurrency(recentCharges)}</span>
+            </div>
+          )}
         </Card>
       )}
 
