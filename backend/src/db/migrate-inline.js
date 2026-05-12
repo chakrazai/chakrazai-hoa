@@ -286,6 +286,8 @@ CREATE INDEX IF NOT EXISTS idx_candidates_election    ON election_candidates(ele
 CREATE INDEX IF NOT EXISTS idx_notices_election       ON election_notices(election_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_election      ON ballot_receipts(election_id);
 CREATE INDEX IF NOT EXISTS idx_audit_election         ON election_audit_log(election_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dues_accounts_resident ON dues_accounts(resident_id);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS note TEXT;
 `;
 
 module.exports = { migrations };

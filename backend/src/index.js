@@ -95,6 +95,53 @@ async function seedInvoices(commId) {
   console.log(`✅ Invoice seed: ${inserted}/10 invoice(s) seeded`);
 }
 
+async function seedDues(commId) {
+  try {
+    const existing = await db.query('SELECT COUNT(*) as cnt FROM dues_accounts WHERE community_id=$1', [commId]);
+    if (parseInt(existing.rows[0].cnt) > 0) {
+      console.log('✅ Dues accounts already seeded, skipping');
+      return;
+    }
+    const seed = [
+      { unit:'Unit 1',   status:'current',    balance:0,   lastPaid:'2026-05-01', payments:['2026-05-01','2026-04-01','2026-03-01','2026-02-01','2026-01-01','2025-12-01'], method:'ACH'   },
+      { unit:'Unit 7',   status:'current',    balance:0,   lastPaid:'2026-04-25', payments:['2026-04-25','2026-03-25','2026-02-25','2026-01-25','2025-12-25','2025-11-25'], method:'Check' },
+      { unit:'Unit 12',  status:'late',       balance:150, lastPaid:'2026-03-31', payments:['2026-03-31','2026-02-28','2026-01-31','2025-12-31','2025-11-30'],              method:'Check' },
+      { unit:'Unit 33',  status:'collections',balance:900, lastPaid:'2026-02-09', payments:['2026-02-09','2026-01-09','2025-12-09','2025-11-09'],                           method:'Check' },
+      { unit:'Unit 42',  status:'current',    balance:0,   lastPaid:'2026-04-26', payments:['2026-04-26','2026-03-26','2026-02-26','2026-01-26','2025-12-26','2025-11-26'], method:'ACH'   },
+      { unit:'Unit 44',  status:'current',    balance:50,  lastPaid:'2026-04-15', payments:['2026-04-15','2026-03-15','2026-02-15','2026-01-15','2025-12-15','2025-11-15'], method:'Check' },
+      { unit:'Unit 55',  status:'late',       balance:150, lastPaid:'2026-03-31', payments:['2026-03-31','2026-02-28','2026-01-31','2025-12-31','2025-11-30'],              method:'ACH'   },
+      { unit:'Unit 67',  status:'delinquent', balance:300, lastPaid:'2026-03-10', payments:['2026-03-10','2026-02-10','2026-01-10','2025-12-10','2025-11-10'],              method:'Check' },
+      { unit:'Unit 83',  status:'current',    balance:0,   lastPaid:'2026-04-24', payments:['2026-04-24','2026-03-24','2026-02-24','2026-01-24','2025-12-24','2025-11-24'], method:'ACH'   },
+      { unit:'Unit 88',  status:'late',       balance:150, lastPaid:'2026-03-31', payments:['2026-03-31','2026-02-28','2026-01-31','2025-12-31','2025-11-30'],              method:'Check' },
+      { unit:'Unit 104', status:'delinquent', balance:150, lastPaid:'2026-03-10', payments:['2026-03-10','2026-02-10','2026-01-10','2025-12-10','2025-11-10'],              method:'Check' },
+      { unit:'Unit 119', status:'current',    balance:0,   lastPaid:'2026-04-25', payments:['2026-04-25','2026-03-25','2026-02-25','2026-01-25','2025-12-25','2025-11-25'], method:'ACH'   },
+    ];
+    let daSeeded = 0, pSeeded = 0;
+    for (const d of seed) {
+      const res = await db.query('SELECT id FROM residents WHERE community_id=$1 AND unit=$2 LIMIT 1', [commId, d.unit]);
+      if (!res.rows.length) continue;
+      const rid = res.rows[0].id;
+      await db.query(
+        `INSERT INTO dues_accounts (community_id, resident_id, balance, monthly_amount, status, last_paid_at)
+         VALUES ($1,$2,$3,150,$4,$5::timestamptz)
+         ON CONFLICT (resident_id) DO NOTHING`,
+        [commId, rid, d.balance, d.status, d.lastPaid]
+      );
+      daSeeded++;
+      for (const pd of d.payments) {
+        await db.query(
+          `INSERT INTO payments (resident_id, community_id, amount, method, status, paid_at)
+           SELECT $1,$2,150,$3,'cleared',$4::timestamptz
+           WHERE NOT EXISTS (SELECT 1 FROM payments WHERE resident_id=$1 AND paid_at::date=$4::date)`,
+          [rid, commId, d.method, pd]
+        );
+        pSeeded++;
+      }
+    }
+    console.log(`✅ Dues seed: ${daSeeded} accounts, ${pSeeded} payment rows`);
+  } catch (err) { console.error('⚠️  Dues seed failed:', err.message); }
+}
+
 async function seedResidents(commId) {
   const residents = [
     {
@@ -325,7 +372,37 @@ async function seedResidents(commId) {
         { id: 1, date: 'May 2, 2026', time: '6:00 AM', area: 'Fitness Center', action: 'Entry', fobId: 'CA-119' },
         { id: 2, date: 'May 2, 2026', time: '7:00 AM', area: 'Fitness Center', action: 'Exit',  fobId: 'CA-119' },
       ],
-    },
+    }
+    ,{
+      unit: 'Unit 7', nit_number: '7-A',
+      address: '7 Oakwood Drive, Unit 7-A, Sacramento, CA 95814',
+      owner_name: 'James Okonkwo', co_owner: null,
+      phone: '(916) 555-0107', email: 'j.okonkwo@email.com',
+      move_in_date: 'Oct 2019', move_out_date: null,
+      hoa_amount: 150, hoa_payment_status: 'current', balance: 0,
+      status: 'good', portal_status: 'active', auto_pay: false,
+      parking_spaces: [{ space: 'P-07', make: 'Hyundai', model: 'Sonata', year: '2021', license: 'ABC7777' }],
+      tenants: [], relatives: [], guest_parking_tags: [],
+      garage_fobs: [{ id: 1, fobId: 'GF-007', status: 'active', issuedDate: 'Oct 10, 2019', lastUsed: 'Apr 25, 2026' }],
+      garage_fob_log: [{ id: 1, date: 'Apr 25, 2026', time: '9:00 AM', action: 'Entry', fobId: 'GF-007', gate: 'Gate A' }],
+      common_area_fobs: [{ id: 1, fobId: 'CA-007', areas: 'Pool, Gym', status: 'active', issuedDate: 'Oct 10, 2019', lastUsed: 'Apr 24, 2026' }],
+      common_area_fob_log: [{ id: 1, date: 'Apr 24, 2026', time: '3:00 PM', area: 'Pool', action: 'Entry', fobId: 'CA-007' }],
+    }
+    ,{
+      unit: 'Unit 104', nit_number: '104-A',
+      address: '104 Oakwood Drive, Unit 104-A, Sacramento, CA 95814',
+      owner_name: 'Robert Patel', co_owner: null,
+      phone: '(916) 555-1040', email: 'r.patel@email.com',
+      move_in_date: 'Mar 2021', move_out_date: null,
+      hoa_amount: 150, hoa_payment_status: 'late', balance: 150,
+      status: 'delinquent', portal_status: 'invited', auto_pay: false,
+      parking_spaces: [{ space: 'P-104', make: 'Kia', model: 'Telluride', year: '2022', license: 'RPT1040' }],
+      tenants: [], relatives: [], guest_parking_tags: [],
+      garage_fobs: [{ id: 1, fobId: 'GF-104', status: 'active', issuedDate: 'Mar 5, 2021', lastUsed: 'Apr 30, 2026' }],
+      garage_fob_log: [{ id: 1, date: 'Apr 30, 2026', time: '10:15 AM', action: 'Entry', fobId: 'GF-104', gate: 'Gate B' }],
+      common_area_fobs: [{ id: 1, fobId: 'CA-104', areas: 'Pool, Gym', status: 'active', issuedDate: 'Mar 5, 2021', lastUsed: 'Apr 10, 2026' }],
+      common_area_fob_log: [{ id: 1, date: 'Apr 10, 2026', time: '11:00 AM', area: 'Pool', action: 'Entry', fobId: 'CA-104' }],
+    }
   ];
 
   let inserted = 0;
@@ -409,6 +486,7 @@ async function start() {
 
     // ── Resident seed ──────────────────────────────────────────────────────────
     await seedResidents(commId);
+    await seedDues(commId);
     await seedInvoices(commId);
   } catch (err) {
     console.error('⚠️  Seed warning:', err.message);

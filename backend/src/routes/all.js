@@ -34,27 +34,84 @@ communityRouter.post('/', async (req, res, next) => {
 // ─── Dues ─────────────────────────────────────────────────────────────────────
 const duesRouter = express.Router();
 duesRouter.use(requireAuth);
+
+duesRouter.get('/accounts', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id as resident_id, r.unit, r.owner_name as owner, r.email, r.auto_pay,
+              da.id, da.balance, da.monthly_amount, da.status, da.last_paid_at,
+              CASE WHEN da.last_paid_at IS NOT NULL THEN EXTRACT(DAY FROM NOW() - da.last_paid_at)::INTEGER ELSE NULL END as days_past_due
+       FROM residents r
+       LEFT JOIN dues_accounts da ON da.resident_id = r.id
+       WHERE r.community_id = $1
+       ORDER BY r.unit`,
+      [req.query.community]
+    );
+    res.json(rows.map(r => ({ ...r, balance: parseFloat(r.balance || 0), monthly_amount: parseFloat(r.monthly_amount || 150) })));
+  } catch (err) { next(err); }
+});
+
 duesRouter.get('/delinquent', async (req, res, next) => {
   try {
-    const { rows } = await db.query('SELECT da.*, r.unit, r.owner_name as owner, r.email FROM dues_accounts da JOIN residents r ON da.resident_id = r.id WHERE da.community_id = $1 AND da.status != $2 ORDER BY da.balance DESC', [req.query.community, 'current']);
-    res.json(rows);
+    const { rows } = await db.query(
+      `SELECT da.*, r.unit, r.owner_name as owner, r.email, r.auto_pay,
+              CASE WHEN da.last_paid_at IS NOT NULL THEN EXTRACT(DAY FROM NOW() - da.last_paid_at)::INTEGER ELSE 0 END as days_past_due
+       FROM dues_accounts da
+       JOIN residents r ON da.resident_id = r.id
+       WHERE da.community_id = $1 AND da.status != 'current'
+       ORDER BY da.balance DESC`,
+      [req.query.community]
+    );
+    res.json(rows.map(r => ({ ...r, balance: parseFloat(r.balance), amount: parseFloat(r.balance) })));
   } catch (err) { next(err); }
 });
+
 duesRouter.get('/payments', async (req, res, next) => {
   try {
-    const { rows } = await db.query('SELECT p.*, r.unit, r.owner_name as owner FROM payments p JOIN residents r ON p.resident_id = r.id WHERE p.community_id = $1 ORDER BY p.paid_at DESC LIMIT 50', [req.query.community]);
-    res.json(rows);
+    const { rows } = await db.query(
+      `SELECT p.*, r.unit, r.owner_name as owner
+       FROM payments p
+       JOIN residents r ON p.resident_id = r.id
+       WHERE p.community_id = $1
+       ORDER BY p.paid_at DESC LIMIT 50`,
+      [req.query.community]
+    );
+    res.json(rows.map(p => ({
+      ...p,
+      amount: parseFloat(p.amount),
+      date: new Date(p.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    })));
   } catch (err) { next(err); }
 });
+
 duesRouter.post('/payment', async (req, res, next) => {
   try {
-    const { residentId, communityId, amount, method } = req.body;
-    const { rows } = await db.query('INSERT INTO payments (resident_id,community_id,amount,method,status) VALUES ($1,$2,$3,$4,$5) RETURNING *', [residentId,communityId,amount,method,'cleared']);
-    await db.query('UPDATE dues_accounts SET balance=GREATEST(0,balance-$1),last_paid_at=NOW() WHERE resident_id=$2', [amount,residentId]);
+    const { residentId, communityId, amount, method, note } = req.body;
+    const { rows } = await db.query(
+      'INSERT INTO payments (resident_id,community_id,amount,method,status,note) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [residentId, communityId, amount, method, 'cleared', note || null]
+    );
+    await db.query(
+      'UPDATE dues_accounts SET balance=GREATEST(0,balance-$1),last_paid_at=NOW(),updated_at=NOW() WHERE resident_id=$2',
+      [amount, residentId]
+    );
+    const { rows: acc } = await db.query('SELECT balance FROM dues_accounts WHERE resident_id=$1', [residentId]);
+    if (acc.length) {
+      const bal = parseFloat(acc[0].balance);
+      const st = bal <= 0 ? 'current' : bal >= 900 ? 'collections' : bal >= 300 ? 'delinquent' : 'late';
+      await db.query('UPDATE dues_accounts SET status=$1,updated_at=NOW() WHERE resident_id=$2', [st, residentId]);
+    }
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
 });
-duesRouter.post('/reminders/all', requireAuth, (req, res) => res.json({ message: 'Reminders queued' }));
+
+duesRouter.post('/:accountId/reminder', async (req, res, next) => {
+  try {
+    res.json({ message: 'Reminder sent', accountId: req.params.accountId });
+  } catch (err) { next(err); }
+});
+
+duesRouter.post('/reminders/all', requireAuth, (req, res) => res.json({ message: 'All reminders queued' }));
 
 // ─── Compliance ───────────────────────────────────────────────────────────────
 const complianceRouter = express.Router();
