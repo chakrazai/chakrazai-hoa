@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { residentAPI, communicationsAPI } from '../lib/api';
+import { residentAPI, communicationsAPI, duesAPI } from '../lib/api';
 import { getCommunityId, resolveCommunityId } from '../lib/community';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
-  AlertTriangle, Users, ChevronRight, Home, Shield,
+  AlertTriangle, Users, ChevronRight, Home, Shield, Hash,
   LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send, Paperclip, Tablet,
 } from 'lucide-react';
 import { AttachmentChip, DocPickerModal } from './OtherPages.jsx';
@@ -861,9 +861,25 @@ function ParkingTab({ r, onUpdate }) {
   };
   const removeTag = (id) => onUpdate({ guestParkingTags: r.guestParkingTags.filter(t => t.id !== id) });
 
+  const [showFobForm, setShowFobForm] = useState(false);
+  const FOB_FEES = { hoa_assigned: 0, lost: 50, damaged: 25 };
+  const [fobDraft, setFobDraft] = useState({ fobId: '', reason: 'hoa_assigned', fee: 0, issuedDate: '' });
+
   const toggleFob = (id) => onUpdate({
     garageFobs: r.garageFobs.map(f => f.id === id ? { ...f, status: f.status === 'active' ? 'suspended' : 'active' } : f),
   });
+
+  const issueFob = async () => {
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const newFob = { id: Date.now(), fobId: fobDraft.fobId.trim() || `GF-${String(r.id).padStart(3,'0')}${String(r.garageFobs.length + 1).padStart(2,'0')}`, status: 'active', issuedDate: fobDraft.issuedDate || today, lastUsed: '—', reason: fobDraft.reason };
+    onUpdate({ garageFobs: [...r.garageFobs, newFob] });
+    if (fobDraft.fee > 0) {
+      try { await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: fobDraft.fee, description: `Garage fob replacement (${fobDraft.reason === 'lost' ? 'lost' : 'damaged'}) — ${newFob.fobId}` }); }
+      catch (err) { console.error('Fee charge failed:', err); }
+    }
+    setFobDraft({ fobId: '', reason: 'hoa_assigned', fee: 0, issuedDate: '' });
+    setShowFobForm(false);
+  };
 
   return (
     <div>
@@ -958,7 +974,39 @@ function ParkingTab({ r, onUpdate }) {
         </div>
       ) : !showTagForm && <p className="text-sm text-slate-400 italic mb-2">No guest parking tags issued</p>}
 
-      <SectionLabel>Parking Garage Fobs</SectionLabel>
+      <div className="flex items-center justify-between mb-2">
+        <SectionLabel>Parking Garage Fobs</SectionLabel>
+        <button onClick={() => setShowFobForm(v => !v)}
+          className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 transition-colors">
+          <Plus size={11} />Issue Fob
+        </button>
+      </div>
+      {showFobForm && (
+        <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2 border border-navy-100">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Fob ID</label><input value={fobDraft.fobId} onChange={e => setFobDraft(d => ({ ...d, fobId: e.target.value }))} placeholder="GF-000" className={iCls()} /></div>
+            <div>
+              <label className={fLabel}>Reason</label>
+              <select value={fobDraft.reason} onChange={e => setFobDraft(d => ({ ...d, reason: e.target.value, fee: FOB_FEES[e.target.value] }))} className={iCls()}>
+                <option value="hoa_assigned">HOA Assigned — No Fee</option>
+                <option value="lost">Lost — $50 per CCR</option>
+                <option value="damaged">Damaged / Broken — $25 per CCR</option>
+              </select>
+            </div>
+          </div>
+          {fobDraft.reason !== 'hoa_assigned' && (
+            <div><label className={fLabel}>Override Fee ($)</label><input type="number" min="0" value={fobDraft.fee} onChange={e => setFobDraft(d => ({ ...d, fee: Number(e.target.value) }))} className={iCls()} /></div>
+          )}
+          <div><label className={fLabel}>Issued Date</label><DateField value={toInputDate(fobDraft.issuedDate)} onChange={e => setFobDraft(d => ({ ...d, issuedDate: fromInputDate(e.target.value) }))} className={iCls()} /></div>
+          {fobDraft.reason !== 'hoa_assigned' && (
+            <p className="text-xs text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-100">${fobDraft.fee} replacement fee will be added to resident's dues balance</p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={issueFob}><Check size={11}/>Issue Fob</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowFobForm(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
       {r.garageFobs.length > 0 ? (
         <div className="space-y-2 mb-4">
           {r.garageFobs.map(fob => (
@@ -1010,13 +1058,78 @@ function ParkingTab({ r, onUpdate }) {
 // ─── Tab: Access (interactive) ────────────────────────────────────────────────
 
 function AccessTab({ r, onUpdate }) {
+  const [showFobForm, setShowFobForm] = useState(false);
+  const [showCodeForm, setShowCodeForm] = useState(false);
+  const FOB_FEES = { hoa_assigned: 0, lost: 50, damaged: 25 };
+  const CODE_FEES = { hoa_assigned: 0, lost: 15, compromised: 0 };
+  const [fobDraft, setFobDraft] = useState({ fobId: '', reason: 'hoa_assigned', fee: 0, areas: 'Pool, Gym', issuedDate: '' });
+  const [codeDraft, setCodeDraft] = useState({ code: '', reason: 'hoa_assigned', fee: 0, areas: 'Pool, Gym', issuedDate: '' });
+
   const toggleFob = (id) => onUpdate({
     commonAreaFobs: r.commonAreaFobs.map(f => f.id === id ? { ...f, status: f.status === 'active' ? 'suspended' : 'active' } : f),
   });
 
+  const issueFob = async () => {
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const newFob = { id: Date.now(), fobId: fobDraft.fobId.trim() || `CA-${String(r.id).padStart(3,'0')}${String(r.commonAreaFobs.length + 1).padStart(2,'0')}`, status: 'active', issuedDate: fobDraft.issuedDate || today, lastUsed: '—', areas: fobDraft.areas, reason: fobDraft.reason };
+    onUpdate({ commonAreaFobs: [...r.commonAreaFobs, newFob] });
+    if (fobDraft.fee > 0) {
+      try { await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: fobDraft.fee, description: `Common area fob replacement (${fobDraft.reason === 'lost' ? 'lost' : 'damaged'}) — ${newFob.fobId}` }); }
+      catch (err) { console.error('Fee charge failed:', err); }
+    }
+    setFobDraft({ fobId: '', reason: 'hoa_assigned', fee: 0, areas: 'Pool, Gym', issuedDate: '' });
+    setShowFobForm(false);
+  };
+
+  const issueCode = async () => {
+    if (!codeDraft.code.trim()) return;
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const newCode = { id: Date.now(), code: codeDraft.code.trim(), areas: codeDraft.areas, status: 'active', issuedDate: codeDraft.issuedDate || today, reason: codeDraft.reason };
+    onUpdate({ commonAreaCodes: [...(r.commonAreaCodes || []), newCode] });
+    if (codeDraft.fee > 0) {
+      try { await duesAPI.charge({ communityId: getCommunityId(), residentId: r.id, amount: codeDraft.fee, description: `Common area code replacement (lost) — ${codeDraft.areas}` }); }
+      catch (err) { console.error('Fee charge failed:', err); }
+    }
+    setCodeDraft({ code: '', reason: 'hoa_assigned', fee: 0, areas: 'Pool, Gym', issuedDate: '' });
+    setShowCodeForm(false);
+  };
+
   return (
     <div>
-      <SectionLabel>Common Area Fobs</SectionLabel>
+      <div className="flex items-center justify-between mb-2">
+        <SectionLabel>Common Area Fobs</SectionLabel>
+        <button onClick={() => setShowFobForm(v => !v)}
+          className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 transition-colors">
+          <Plus size={11} />Issue Fob
+        </button>
+      </div>
+      {showFobForm && (
+        <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2 border border-navy-100">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Fob ID</label><input value={fobDraft.fobId} onChange={e => setFobDraft(d => ({ ...d, fobId: e.target.value }))} placeholder="CA-000" className={iCls()} /></div>
+            <div>
+              <label className={fLabel}>Reason</label>
+              <select value={fobDraft.reason} onChange={e => setFobDraft(d => ({ ...d, reason: e.target.value, fee: FOB_FEES[e.target.value] }))} className={iCls()}>
+                <option value="hoa_assigned">HOA Assigned — No Fee</option>
+                <option value="lost">Lost — $50 per CCR</option>
+                <option value="damaged">Damaged / Broken — $25 per CCR</option>
+              </select>
+            </div>
+          </div>
+          <div><label className={fLabel}>Access Areas</label><input value={fobDraft.areas} onChange={e => setFobDraft(d => ({ ...d, areas: e.target.value }))} placeholder="Pool, Gym, Clubhouse" className={iCls()} /></div>
+          {fobDraft.reason !== 'hoa_assigned' && (
+            <div><label className={fLabel}>Override Fee ($)</label><input type="number" min="0" value={fobDraft.fee} onChange={e => setFobDraft(d => ({ ...d, fee: Number(e.target.value) }))} className={iCls()} /></div>
+          )}
+          <div><label className={fLabel}>Issued Date</label><DateField value={toInputDate(fobDraft.issuedDate)} onChange={e => setFobDraft(d => ({ ...d, issuedDate: fromInputDate(e.target.value) }))} className={iCls()} /></div>
+          {fobDraft.reason !== 'hoa_assigned' && (
+            <p className="text-xs text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-100">${fobDraft.fee} replacement fee will be added to resident's dues balance</p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={issueFob}><Check size={11}/>Issue Fob</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowFobForm(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
       {r.commonAreaFobs.length > 0 ? (
         <div className="space-y-2 mb-4">
           {r.commonAreaFobs.map(fob => (
@@ -1062,6 +1175,59 @@ function AccessTab({ r, onUpdate }) {
           </tbody>
         </Table>
       ) : <p className="text-sm text-slate-400 italic">No activity logged</p>}
+
+      {/* ── Common Area Access Codes ── */}
+      <div className="flex items-center justify-between mt-4 mb-2">
+        <SectionLabel>Common Area Access Codes</SectionLabel>
+        <button onClick={() => setShowCodeForm(v => !v)}
+          className="text-xs text-navy-600 hover:text-navy-800 font-medium flex items-center gap-1 transition-colors">
+          <Plus size={11} />Issue / Reset Code
+        </button>
+      </div>
+      {showCodeForm && (
+        <div className="p-3 bg-slate-50 rounded-xl mb-3 space-y-2 border border-navy-100">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={fLabel}>Access Code</label><input value={codeDraft.code} onChange={e => setCodeDraft(d => ({ ...d, code: e.target.value }))} placeholder="0000" maxLength={8} className={iCls()} /></div>
+            <div>
+              <label className={fLabel}>Reason</label>
+              <select value={codeDraft.reason} onChange={e => setCodeDraft(d => ({ ...d, reason: e.target.value, fee: CODE_FEES[e.target.value] }))} className={iCls()}>
+                <option value="hoa_assigned">HOA Assigned — No Fee</option>
+                <option value="lost">Lost / Forgotten — $15 per CCR</option>
+                <option value="compromised">Compromised / Reset — No Fee</option>
+              </select>
+            </div>
+          </div>
+          <div><label className={fLabel}>Access Areas</label><input value={codeDraft.areas} onChange={e => setCodeDraft(d => ({ ...d, areas: e.target.value }))} placeholder="Pool, Gym" className={iCls()} /></div>
+          {codeDraft.reason === 'lost' && (
+            <div><label className={fLabel}>Override Fee ($)</label><input type="number" min="0" value={codeDraft.fee} onChange={e => setCodeDraft(d => ({ ...d, fee: Number(e.target.value) }))} className={iCls()} /></div>
+          )}
+          <div><label className={fLabel}>Issued Date</label><DateField value={toInputDate(codeDraft.issuedDate)} onChange={e => setCodeDraft(d => ({ ...d, issuedDate: fromInputDate(e.target.value) }))} className={iCls()} /></div>
+          {codeDraft.reason === 'lost' && codeDraft.fee > 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-100">${codeDraft.fee} code replacement fee will be added to resident's dues balance</p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={issueCode}><Check size={11}/>Issue Code</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowCodeForm(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+      {(r.commonAreaCodes || []).length > 0 ? (
+        <div className="space-y-2 mb-4">
+          {(r.commonAreaCodes || []).map(code => (
+            <div key={code.id} className="p-3 bg-slate-50 rounded-xl">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Shield size={13} className="text-slate-400" />
+                  <span className="text-xs font-bold text-slate-800 font-mono tracking-widest">{code.code}</span>
+                </div>
+                <Badge variant={code.status === 'active' ? 'green' : 'gray'}>{code.status}</Badge>
+              </div>
+              <p className="text-xs text-slate-600">Areas: {code.areas}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Issued: {code.issuedDate}{code.reason && code.reason !== 'hoa_assigned' ? ` · Reason: ${code.reason}` : ''}</p>
+            </div>
+          ))}
+        </div>
+      ) : !showCodeForm && <p className="text-sm text-slate-400 italic mb-4">No access codes issued</p>}
     </div>
   );
 }
@@ -1769,6 +1935,7 @@ function fromDb(row) {
     garageFobLog:     row.garage_fob_log     || [],
     commonAreaFobs:   row.common_area_fobs   || [],
     commonAreaFobLog: row.common_area_fob_log || [],
+    commonAreaCodes:  row.common_area_codes  || [],
     electronicVoting:            row.electronic_voting_consent      || false,
     electronicVotingConsentDate: row.electronic_voting_consent_date || '',
     electronicStatements:        row.electronic_statements          || false,
@@ -1800,6 +1967,7 @@ function toDb(r) {
     garageFobLog:     r.garageFobLog     || [],
     commonAreaFobs:   r.commonAreaFobs   || [],
     commonAreaFobLog: r.commonAreaFobLog || [],
+    commonAreaCodes:  r.commonAreaCodes  || [],
     electronicVoting:            r.electronicVoting            || false,
     electronicVotingConsentDate: r.electronicVotingConsentDate || null,
     electronicStatements:        r.electronicStatements        || false,

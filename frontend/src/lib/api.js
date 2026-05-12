@@ -42,6 +42,7 @@ export const duesAPI = {
   sendReminder:  (accountId)   => api.post(`/api/dues/${accountId}/reminder`),
   sendAllReminders: (communityId) => api.post('/api/dues/reminders/all', { communityId }),
   allAccounts: (communityId) => api.get(`/api/dues/accounts?community=${communityId}`),
+  charge: (data) => api.post('/api/dues/charge', data),
 };
 export const complianceAPI = {
   alerts:   (state)       => api.get(`/api/compliance?state=${state}`),

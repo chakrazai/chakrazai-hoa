@@ -142,6 +142,74 @@ async function seedDues(commId) {
   } catch (err) { console.error('⚠️  Dues seed failed:', err.message); }
 }
 
+async function seedFobEvents(commId) {
+  try {
+    // Seed replacement fob events for specific residents + charge fees to their dues accounts.
+    // Each entry either adds a new fob to the resident's JSONB array and/or charges a fee.
+    const events = [
+      {
+        unit: 'Unit 12', fobType: 'garage',
+        newFob: { fobId: 'GF-024B', status: 'active', issuedDate: 'Apr 10, 2026', lastUsed: '—', reason: 'lost' },
+        fee: 50, feeDesc: 'Garage fob replacement (lost) — GF-024B',
+      },
+      {
+        unit: 'Unit 44', fobType: 'common_area',
+        newFob: { fobId: 'CA-044B', status: 'active', issuedDate: 'Apr 15, 2026', lastUsed: '—', reason: 'damaged', areas: 'Pool, Gym' },
+        fee: 25, feeDesc: 'Common area fob replacement (damaged) — CA-044B',
+      },
+      {
+        unit: 'Unit 7', fobType: 'common_area',
+        newFob: { fobId: 'CA-007B', status: 'active', issuedDate: 'May 1, 2026', lastUsed: '—', reason: 'hoa_assigned', areas: 'Pool, Gym, Clubhouse' },
+        fee: 0,
+      },
+      {
+        unit: 'Unit 88', fobType: 'code',
+        newCode: { code: '7812', areas: 'Pool, Gym', issuedDate: 'Apr 20, 2026', status: 'active', reason: 'hoa_assigned' },
+        fee: 0,
+      },
+      {
+        unit: 'Unit 33', fobType: 'code',
+        newCode: { code: '4491', areas: 'Gym', issuedDate: 'Mar 5, 2026', status: 'active', reason: 'hoa_assigned' },
+        fee: 0,
+      },
+    ];
+
+    for (const ev of events) {
+      const res = await db.query('SELECT id, garage_fobs, common_area_fobs, common_area_codes FROM residents WHERE community_id=$1 AND unit=$2 LIMIT 1', [commId, ev.unit]);
+      if (!res.rows.length) continue;
+      const { id: rid, garage_fobs, common_area_fobs, common_area_codes } = res.rows[0];
+
+      if (ev.fobType === 'garage') {
+        const existing = Array.isArray(garage_fobs) ? garage_fobs : [];
+        if (existing.some(f => f.fobId === ev.newFob.fobId)) continue;
+        const updated = [...existing, { ...ev.newFob, id: Date.now() + Math.floor(Math.random() * 1000) }];
+        await db.query('UPDATE residents SET garage_fobs=$1 WHERE id=$2', [JSON.stringify(updated), rid]);
+      } else if (ev.fobType === 'common_area') {
+        const existing = Array.isArray(common_area_fobs) ? common_area_fobs : [];
+        if (existing.some(f => f.fobId === ev.newFob.fobId)) continue;
+        const updated = [...existing, { ...ev.newFob, id: Date.now() + Math.floor(Math.random() * 1000) }];
+        await db.query('UPDATE residents SET common_area_fobs=$1 WHERE id=$2', [JSON.stringify(updated), rid]);
+      } else if (ev.fobType === 'code') {
+        const existing = Array.isArray(common_area_codes) ? common_area_codes : [];
+        if (existing.some(c => c.code === ev.newCode.code)) continue;
+        const updated = [...existing, { ...ev.newCode, id: Date.now() + Math.floor(Math.random() * 1000) }];
+        await db.query('UPDATE residents SET common_area_codes=$1 WHERE id=$2', [JSON.stringify(updated), rid]);
+      }
+
+      if (ev.fee > 0) {
+        await db.query('UPDATE dues_accounts SET balance = balance + $1 WHERE community_id=$2 AND resident_id=$3', [ev.fee, commId, rid]);
+        await db.query(
+          `INSERT INTO payments (resident_id, community_id, amount, method, status, note, paid_at)
+           SELECT $1,$2,$3,'Charge','pending',$4,NOW()
+           WHERE NOT EXISTS (SELECT 1 FROM payments WHERE resident_id=$1 AND note=$4)`,
+          [rid, commId, -Math.abs(ev.fee), ev.feeDesc]
+        );
+      }
+    }
+    console.log('✅ Fob events seed complete');
+  } catch (err) { console.error('⚠️  Fob events seed failed:', err.message); }
+}
+
 async function seedViolations(commId) {
   try {
     const existing = await db.query('SELECT COUNT(*) AS cnt FROM violations WHERE community_id=$1', [commId]);
@@ -523,6 +591,7 @@ async function start() {
     await seedDues(commId);
     await seedInvoices(commId);
     await seedViolations(commId);
+    await seedFobEvents(commId);
   } catch (err) {
     console.error('⚠️  Seed warning:', err.message);
   }

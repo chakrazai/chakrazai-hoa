@@ -288,6 +288,7 @@ CREATE INDEX IF NOT EXISTS idx_receipts_election      ON ballot_receipts(electio
 CREATE INDEX IF NOT EXISTS idx_audit_election         ON election_audit_log(election_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dues_accounts_resident ON dues_accounts(resident_id);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE residents ADD COLUMN IF NOT EXISTS common_area_codes JSONB DEFAULT '[]';
 `;
 
 module.exports = { migrations };

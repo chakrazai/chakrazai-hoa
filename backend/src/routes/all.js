@@ -105,6 +105,21 @@ duesRouter.post('/payment', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+duesRouter.post('/charge', async (req, res, next) => {
+  try {
+    const { communityId, residentId, amount, description } = req.body;
+    await db.query(
+      `UPDATE dues_accounts SET balance = balance + $1 WHERE community_id=$2 AND resident_id=$3`,
+      [amount, communityId, residentId]
+    );
+    await db.query(
+      `INSERT INTO payments (resident_id, community_id, amount, method, status, note, paid_at)
+       VALUES ($1,$2,$3,'Charge','pending',$4,NOW())`,
+      [residentId, communityId, -Math.abs(amount), description]
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
 duesRouter.post('/:accountId/reminder', async (req, res, next) => {
   try {
     res.json({ message: 'Reminder sent', accountId: req.params.accountId });
@@ -221,21 +236,21 @@ residentRouter.post('/', async (req, res, next) => {
     const { communityId,unit,ownerName,coOwner,nitNumber,address,email,phone,
             moveInDate,moveOutDate,hoaAmount,hoaPaymentStatus,balance,status,
             portal,autoPay,parkingSpaces,tenants,relatives,
-            guestParkingTags,garageFobs,garageFobLog,commonAreaFobs,commonAreaFobLog } = req.body;
+            guestParkingTags,garageFobs,garageFobLog,commonAreaFobs,commonAreaFobLog,commonAreaCodes } = req.body;
     const { rows } = await db.query(
       `INSERT INTO residents
          (community_id,unit,owner_name,co_owner,nit_number,address,email,phone,
           move_in_date,move_out_date,hoa_amount,hoa_payment_status,balance,status,
           portal_status,auto_pay,parking_spaces,tenants,relatives,
-          guest_parking_tags,garage_fobs,garage_fob_log,common_area_fobs,common_area_fob_log)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+          guest_parking_tags,garage_fobs,garage_fob_log,common_area_fobs,common_area_fob_log,common_area_codes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        RETURNING *`,
       [communityId,unit,ownerName,coOwner||null,nitNumber||null,address||null,email||null,phone||null,
        moveInDate||null,moveOutDate||null,hoaAmount||150,hoaPaymentStatus||'current',balance||0,status||'good',
        portal||'none',autoPay||false,
        JSON.stringify(parkingSpaces||[]),JSON.stringify(tenants||[]),JSON.stringify(relatives||[]),
        JSON.stringify(guestParkingTags||[]),JSON.stringify(garageFobs||[]),JSON.stringify(garageFobLog||[]),
-       JSON.stringify(commonAreaFobs||[]),JSON.stringify(commonAreaFobLog||[])]
+       JSON.stringify(commonAreaFobs||[]),JSON.stringify(commonAreaFobLog||[]),JSON.stringify(commonAreaCodes||[])]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -245,7 +260,7 @@ residentRouter.put('/:id', async (req, res, next) => {
     const { unit,ownerName,coOwner,nitNumber,address,email,phone,
             moveInDate,moveOutDate,hoaAmount,hoaPaymentStatus,balance,status,
             portal,autoPay,parkingSpaces,tenants,relatives,
-            guestParkingTags,garageFobs,garageFobLog,commonAreaFobs,commonAreaFobLog,
+            guestParkingTags,garageFobs,garageFobLog,commonAreaFobs,commonAreaFobLog,commonAreaCodes,
             electronicVoting,electronicVotingConsentDate,electronicStatements } = req.body;
     const { rows } = await db.query(
       `UPDATE residents SET
@@ -253,14 +268,14 @@ residentRouter.put('/:id', async (req, res, next) => {
          move_in_date=$8,move_out_date=$9,hoa_amount=$10,hoa_payment_status=$11,balance=$12,status=$13,
          portal_status=$14,auto_pay=$15,parking_spaces=$16,tenants=$17,relatives=$18,
          guest_parking_tags=$19,garage_fobs=$20,garage_fob_log=$21,common_area_fobs=$22,common_area_fob_log=$23,
-         electronic_voting_consent=$24,electronic_voting_consent_date=$25,electronic_statements=$26
-       WHERE id=$27 RETURNING *`,
+         common_area_codes=$24,electronic_voting_consent=$25,electronic_voting_consent_date=$26,electronic_statements=$27
+       WHERE id=$28 RETURNING *`,
       [unit,ownerName,coOwner||null,nitNumber||null,address||null,email||null,phone||null,
        moveInDate||null,moveOutDate||null,hoaAmount||150,hoaPaymentStatus||'current',balance||0,status||'good',
        portal||'none',autoPay||false,
        JSON.stringify(parkingSpaces||[]),JSON.stringify(tenants||[]),JSON.stringify(relatives||[]),
        JSON.stringify(guestParkingTags||[]),JSON.stringify(garageFobs||[]),JSON.stringify(garageFobLog||[]),
-       JSON.stringify(commonAreaFobs||[]),JSON.stringify(commonAreaFobLog||[]),
+       JSON.stringify(commonAreaFobs||[]),JSON.stringify(commonAreaFobLog||[]),JSON.stringify(commonAreaCodes||[]),
        electronicVoting||false, electronicVotingConsentDate||null, electronicStatements||false,
        req.params.id]
     );
