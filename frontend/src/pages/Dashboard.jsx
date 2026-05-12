@@ -289,7 +289,7 @@ export default function Dashboard({ onNavigate }) {
           </div>
         ) : (
           visibleItems.map(item => (
-            <div key={item.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 flex items-center gap-3 hover:bg-slate-50 transition-colors group">
+            <div key={item.id} className="px-5 py-3.5 border-b border-slate-50 last:border-0 flex items-center gap-3 hover:bg-slate-50 transition-colors">
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${TYPE_BG[item.type]}`}>
                 {TYPE_ICON[item.type]}
               </div>
@@ -306,13 +306,13 @@ export default function Dashboard({ onNavigate }) {
                 <span className="text-[10px] text-slate-400">{item.date}</span>
                 <button
                   onClick={() => onNavigate(item.page, item.params)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-navy-600 bg-navy-50 border border-navy-200 rounded-lg hover:bg-navy-100 transition-colors opacity-0 group-hover:opacity-100">
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-navy-600 bg-navy-50 border border-navy-200 rounded-lg hover:bg-navy-100 transition-colors">
                   {item.actionLabel} <ChevronRight size={10} />
                 </button>
                 <button
                   onClick={() => dismiss(item.id)}
                   title="Dismiss"
-                  className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100">
+                  className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition-colors">
                   <X size={12} />
                 </button>
               </div>
