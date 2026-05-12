@@ -304,6 +304,85 @@ residentRouter.post('/:id/invite', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+residentRouter.get('/:id/ledger', async (req, res, next) => {
+  try {
+    const rid = req.params.id;
+    const { rows: accRows } = await db.query(
+      'SELECT * FROM dues_accounts WHERE resident_id=$1', [rid]
+    );
+    const acc = accRows[0] || {};
+
+    const { rows: pmtRows } = await db.query(
+      `SELECT id, amount, method, status, note, paid_at FROM payments WHERE resident_id=$1 ORDER BY paid_at DESC`,
+      [rid]
+    );
+    const { rows: violRows } = await db.query(
+      `SELECT id, type, description, fine, status, issued_date FROM violations WHERE resident_id=$1 AND fine > 0 ORDER BY issued_date DESC`,
+      [rid]
+    );
+
+    const pmtEntries = pmtRows.map(p => ({
+      id:          `pmt-${p.id}`,
+      rawDate:     p.paid_at,
+      date:        new Date(p.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      type:        p.status === 'charge' ? 'charge' : 'payment',
+      description: p.note || (p.status === 'charge' ? 'Fee charge' : 'HOA payment'),
+      amount:      parseFloat(p.amount),
+      method:      p.method,
+      status:      p.status,
+    }));
+    const violEntries = violRows.map(v => ({
+      id:          `viol-${v.id}`,
+      rawDate:     v.issued_date,
+      date:        v.issued_date ? new Date(v.issued_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
+      type:        'violation',
+      description: `${v.type || 'Violation'} — ${v.description || ''}`,
+      amount:      parseFloat(v.fine),
+      method:      null,
+      status:      v.status,
+    }));
+
+    const ledger = [...pmtEntries, ...violEntries].sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
+
+    const totalPaid    = pmtRows.filter(p => p.status === 'cleared').reduce((s, p) => s + parseFloat(p.amount), 0);
+    const totalCharged = pmtRows.filter(p => p.status === 'charge').reduce((s, p) => s + parseFloat(p.amount), 0);
+    const totalFines   = violRows.reduce((s, v) => s + parseFloat(v.fine), 0);
+
+    res.json({
+      account: {
+        balance:       parseFloat(acc.balance    || 0),
+        monthlyAmount: parseFloat(acc.monthly_amount || 150),
+        status:        acc.status      || 'current',
+        lastPaidAt:    acc.last_paid_at || null,
+      },
+      summary: { totalPaid, totalCharged, totalFines },
+      ledger,
+    });
+  } catch (err) { next(err); }
+});
+
+residentRouter.post('/:id/payment', async (req, res, next) => {
+  try {
+    const rid = req.params.id;
+    const { communityId, amount, method, note } = req.body;
+    await db.query(
+      'INSERT INTO payments (resident_id,community_id,amount,method,status,note) VALUES ($1,$2,$3,$4,$5,$6)',
+      [rid, communityId, amount, method, 'cleared', note || null]
+    );
+    await db.query(
+      'UPDATE dues_accounts SET balance=GREATEST(0,balance-$1),last_paid_at=NOW(),updated_at=NOW() WHERE resident_id=$2',
+      [amount, rid]
+    );
+    const { rows: acc } = await db.query('SELECT balance FROM dues_accounts WHERE resident_id=$1', [rid]);
+    if (acc.length) {
+      const bal = parseFloat(acc[0].balance);
+      const st  = bal <= 0 ? 'current' : bal >= 900 ? 'collections' : bal >= 300 ? 'delinquent' : 'late';
+      await db.query('UPDATE dues_accounts SET status=$1,updated_at=NOW() WHERE resident_id=$2', [st, rid]);
+    }
+    res.status(201).json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ─── Documents ────────────────────────────────────────────────────────────────
 const documentRouter = express.Router();
 documentRouter.use(requireAuth);

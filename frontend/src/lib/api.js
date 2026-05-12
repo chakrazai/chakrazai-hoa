@@ -66,11 +66,13 @@ export const vendorAPI = {
   update: (id, data)    => api.put(`/api/vendors/${id}`, data),
 };
 export const residentAPI = {
-  list:   (communityId) => api.get(`/api/residents?community=${communityId}`),
-  get:    (id)          => api.get(`/api/residents/${id}`),
-  create: (data)        => api.post('/api/residents', data),
-  update: (id, data)    => api.put(`/api/residents/${id}`, data),
-  invite: (id)          => api.post(`/api/residents/${id}/invite`),
+  list:    (communityId) => api.get(`/api/residents?community=${communityId}`),
+  get:     (id)          => api.get(`/api/residents/${id}`),
+  create:  (data)        => api.post('/api/residents', data),
+  update:  (id, data)    => api.put(`/api/residents/${id}`, data),
+  invite:  (id)          => api.post(`/api/residents/${id}/invite`),
+  ledger:  (id)          => api.get(`/api/residents/${id}/ledger`),
+  payment: (id, data)    => api.post(`/api/residents/${id}/payment`, data),
 };
 export const documentAPI = {
   list:   (communityId) => api.get(`/api/documents?community=${communityId}`),

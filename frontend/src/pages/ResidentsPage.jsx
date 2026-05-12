@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { residentAPI, communicationsAPI, duesAPI } from '../lib/api';
 import { getCommunityId, resolveCommunityId } from '../lib/community';
 import {
   Search, Plus, Phone, Mail, MapPin, X, Car, Key,
   AlertTriangle, Users, ChevronRight, Home, Shield, Hash,
   LogIn, LogOut, Edit2, Check, Trash2, Layers, ZoomIn, FileText, Send, Paperclip, Tablet,
+  TrendingDown, CreditCard, ArrowDownCircle, ArrowUpCircle, DollarSign,
 } from 'lucide-react';
 import { AttachmentChip, DocPickerModal } from './OtherPages.jsx';
 import { getResidentFloor } from './BuildingPage';
@@ -737,9 +738,97 @@ function OverviewTab({ r, onUpdate }) {
 
 // ─── Tab: Financials (editable) ───────────────────────────────────────────────
 
+const LEDGER_TYPE_META = {
+  payment:   { label: 'Payment',   icon: ArrowDownCircle, color: 'text-emerald-600', bg: 'bg-emerald-50',  badge: 'green'  },
+  charge:    { label: 'Fee Charge',icon: CreditCard,       color: 'text-amber-600',  bg: 'bg-amber-50',   badge: 'amber'  },
+  violation: { label: 'Violation', icon: AlertTriangle,    color: 'text-rose-600',   bg: 'bg-rose-50',    badge: 'red'    },
+};
+const VIOLATION_STATUS_LABELS = {
+  notice_sent:     'Notice Sent',
+  hearing_pending: 'Hearing',
+  escalated:       'Escalated',
+  resolved:        'Resolved',
+  waived:          'Waived',
+};
+const PMT_METHODS = ['ACH', 'Check', 'Credit Card', 'Zelle', 'Wire Transfer', 'Cash'];
+
+function RecordResidentPaymentModal({ r, communityId, onSave, onClose }) {
+  const [form, setForm] = useState({ amount: String(r.balance > 0 ? r.balance : r.hoaAmount), method: 'ACH', note: '' });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState('');
+  const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+  const save = async () => {
+    const amt = parseFloat(form.amount);
+    if (!amt || amt <= 0) { setErr('Enter a valid amount'); return; }
+    setSaving(true);
+    try {
+      await residentAPI.payment(r.id, { communityId, amount: amt, method: form.method, note: form.note });
+      onSave();
+    } catch { setErr('Save failed — please try again'); setSaving(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-slate-900">Record Payment — {r.unit}</h2>
+          <button onClick={onClose}><X size={16} className="text-slate-400" /></button>
+        </div>
+        {err && <p className="text-xs text-rose-600 mb-3">{err}</p>}
+        <div className="space-y-3">
+          <div>
+            <label className={fLabel}>Amount ($) *</label>
+            <input type="number" min="0.01" step="0.01" value={form.amount} onChange={f('amount')} className={iCls()} />
+          </div>
+          <div>
+            <label className={fLabel}>Method</label>
+            <select value={form.method} onChange={f('method')} className={selCls}>
+              {PMT_METHODS.map(m => <option key={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={fLabel}>Note</label>
+            <input value={form.note} onChange={f('note')} className={iCls()} placeholder="e.g. May 2026 HOA dues" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-slate-100">
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" size="sm" onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : <><Check size={12} />Save Payment</>}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FinancialsTab({ r, onUpdate }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft]     = useState({});
+  const communityId  = getCommunityId();
+  const queryClient  = useQueryClient();
+  const [editing, setEditing]       = useState(false);
+  const [draft, setDraft]           = useState({});
+  const [ledgerFilter, setLedgerFilter] = useState('all');
+  const [showPayModal, setShowPayModal] = useState(false);
+
+  const { data: ledgerData, isLoading: ledgerLoading } = useQuery({
+    queryKey: ['resident-ledger', r.id],
+    queryFn:  () => residentAPI.ledger(r.id).then(res => res.data),
+    staleTime: 30_000,
+  });
+
+  const account = ledgerData?.account;
+  const summary = ledgerData?.summary || {};
+  const allEntries = ledgerData?.ledger || [];
+  const filteredEntries = ledgerFilter === 'all'
+    ? allEntries
+    : allEntries.filter(e => e.type === ledgerFilter);
+
+  const balance       = account?.balance      ?? r.balance;
+  const monthlyAmount = account?.monthlyAmount ?? r.hoaAmount;
+  const acctStatus    = account?.status        ?? r.hoaPaymentStatus;
+  const lastPaidAt    = account?.lastPaidAt
+    ? new Date(account.lastPaidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—';
+  const paySt = payStMap[acctStatus] || { l: 'Unknown', c: 'gray' };
 
   const startEdit = () => {
     setDraft({ hoaAmount: r.hoaAmount, hoaPaymentStatus: r.hoaPaymentStatus, autoPay: r.autoPay, balance: r.balance });
@@ -747,9 +836,15 @@ function FinancialsTab({ r, onUpdate }) {
   };
   const save   = () => { onUpdate(draft); setEditing(false); };
   const cancel = () => setEditing(false);
-  const d = (f) => (v) => setDraft(prev => ({ ...prev, [f]: v }));
+  const d = f => v => setDraft(p => ({ ...p, [f]: v }));
 
-  const paySt = payStMap[r.hoaPaymentStatus] || { l: 'Unknown', c: 'gray' };
+  const afterPayment = () => {
+    queryClient.invalidateQueries(['resident-ledger', r.id]);
+    queryClient.invalidateQueries(['dues-accounts']);
+    queryClient.invalidateQueries(['dues-delinquent']);
+    queryClient.invalidateQueries(['dues-payments']);
+    setShowPayModal(false);
+  };
 
   if (editing) return (
     <div>
@@ -787,41 +882,145 @@ function FinancialsTab({ r, onUpdate }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mt-1">
-        <span />
-        <TabEditBar editing={false} onEdit={startEdit} />
-      </div>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-slate-50 rounded-xl p-4">
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">Monthly HOA</p>
-          <p className="text-2xl font-bold text-slate-900">{formatCurrency(r.hoaAmount)}</p>
-          <p className="text-xs text-slate-400 mt-0.5">per month</p>
+      {showPayModal && (
+        <RecordResidentPaymentModal
+          r={r} communityId={communityId}
+          onSave={afterPayment} onClose={() => setShowPayModal(false)}
+        />
+      )}
+
+      {/* Header row */}
+      <div className="flex items-center justify-between mt-1 mb-3">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Account Summary</span>
+        <div className="flex gap-1.5">
+          <Button variant="primary" size="sm" onClick={() => setShowPayModal(true)}><Plus size={11}/>Record Payment</Button>
+          <TabEditBar editing={false} onEdit={startEdit} />
         </div>
-        <div className="bg-slate-50 rounded-xl p-4">
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">Balance Due</p>
-          <p className={clsx('text-2xl font-bold', r.balance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-            {r.balance > 0 ? formatCurrency(r.balance) : '$0'}
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">Monthly HOA</p>
+          <p className="text-xl font-bold text-slate-900">{formatCurrency(monthlyAmount)}</p>
+          <p className="text-[11px] text-slate-400">{formatCurrency(monthlyAmount * 12)}/year</p>
+        </div>
+        <div className={clsx('rounded-xl p-3', balance > 0 ? 'bg-rose-50' : 'bg-emerald-50')}>
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">Balance Due</p>
+          <p className={clsx('text-xl font-bold', balance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+            {balance > 0 ? formatCurrency(balance) : '$0.00'}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">{r.balance > 0 ? 'outstanding' : 'up to date'}</p>
+          <p className="text-[11px] text-slate-400">{balance > 0 ? 'outstanding' : 'up to date'}</p>
+        </div>
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">Total Paid</p>
+          <p className="text-xl font-bold text-emerald-700">{formatCurrency(summary.totalPaid || 0)}</p>
+          <p className="text-[11px] text-slate-400">all time payments</p>
+        </div>
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">Fees &amp; Fines</p>
+          <p className="text-xl font-bold text-amber-700">
+            {formatCurrency((summary.totalCharged || 0) + (summary.totalFines || 0))}
+          </p>
+          <p className="text-[11px] text-slate-400">charges + violations</p>
         </div>
       </div>
-      <SectionLabel>Payment Details</SectionLabel>
-      {[
-        { label: 'HOA Payment Status', value: <Badge variant={paySt.c}>{paySt.l}</Badge> },
-        { label: 'Auto-Pay', value: <Badge variant={r.autoPay ? 'green' : 'gray'}>{r.autoPay ? 'Enrolled' : 'Manual'}</Badge> },
-        { label: 'Annual HOA Total', value: <span className="text-sm font-semibold text-slate-800">{formatCurrency(r.hoaAmount * 12)}</span> },
-      ].map(({ label, value }) => (
-        <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
-          <span className="text-sm text-slate-600">{label}</span>{value}
+
+      {/* Account details row */}
+      <div className="mb-4 space-y-0">
+        {[
+          { label: 'Status',       value: <Badge variant={paySt.c}>{paySt.l}</Badge> },
+          { label: 'Auto-Pay',     value: <Badge variant={r.autoPay ? 'green' : 'gray'}>{r.autoPay ? 'Enrolled' : 'Manual'}</Badge> },
+          { label: 'Last Payment', value: <span className="text-xs font-semibold text-slate-700">{lastPaidAt}</span> },
+        ].map(({ label, value }) => (
+          <div key={label} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+            <span className="text-xs text-slate-500">{label}</span>{value}
+          </div>
+        ))}
+      </div>
+
+      {balance > 0 && (
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
+          <AlertTriangle size={14} className="text-rose-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-rose-800">{formatCurrency(balance)} outstanding</p>
+            <p className="text-[11px] text-rose-600 mt-0.5">Automated reminder will be sent in 3 days.</p>
+          </div>
+          <Button variant="danger" size="sm" onClick={() => setShowPayModal(true)}>Pay Now</Button>
         </div>
-      ))}
-      {r.balance > 0 && (
-        <div className="mt-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl">
-          <p className="text-xs font-semibold text-rose-800 mb-1">Outstanding Balance</p>
-          <p className="text-xs text-rose-600">{formatCurrency(r.balance)} past due. Automated reminder will be sent in 3 days.</p>
-          <div className="flex gap-2 mt-3">
-            <Button variant="danger" size="sm">Send Notice</Button>
-            <Button variant="secondary" size="sm">Payment Plan</Button>
+      )}
+
+      {/* Ledger */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Transaction Ledger</span>
+        <div className="flex gap-1">
+          {[['all','All'],['payment','Payments'],['charge','Charges'],['violation','Violations']].map(([v,l]) => (
+            <button key={v} onClick={() => setLedgerFilter(v)}
+              className={clsx('px-2 py-0.5 text-[10px] font-semibold rounded-full transition-colors',
+                ledgerFilter === v ? 'bg-navy-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {ledgerLoading ? (
+        <div className="py-6 text-center text-xs text-slate-400">Loading ledger…</div>
+      ) : filteredEntries.length === 0 ? (
+        <div className="py-8 text-center">
+          <DollarSign size={24} className="text-slate-200 mx-auto mb-2" />
+          <p className="text-xs text-slate-400">No {ledgerFilter === 'all' ? '' : ledgerFilter} transactions yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {filteredEntries.map(entry => {
+            const meta = LEDGER_TYPE_META[entry.type] || LEDGER_TYPE_META.charge;
+            const Icon = meta.icon;
+            const isCredit = entry.type === 'payment';
+            return (
+              <div key={entry.id} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+                <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5', meta.bg)}>
+                  <Icon size={13} className={meta.color} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-800 leading-tight truncate">{entry.description}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400">{entry.date}</span>
+                    {entry.method && (
+                      <span className="text-[10px] text-slate-400">{entry.method}</span>
+                    )}
+                    <Badge variant={
+                      entry.status === 'cleared' ? 'green' :
+                      entry.status === 'charge'  ? 'amber' :
+                      entry.status === 'resolved'? 'green' :
+                      entry.status === 'waived'  ? 'blue'  : 'gray'
+                    }>
+                      {entry.type === 'violation'
+                        ? (VIOLATION_STATUS_LABELS[entry.status] || entry.status)
+                        : entry.status === 'cleared' ? 'Cleared'
+                        : entry.status === 'charge'  ? 'Fee Charge'
+                        : entry.status}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className={clsx('text-sm font-bold', isCredit ? 'text-emerald-600' : 'text-rose-600')}>
+                    {isCredit ? '−' : '+'}{formatCurrency(Math.abs(entry.amount))}
+                  </p>
+                  <p className="text-[10px] text-slate-400">{isCredit ? 'credit' : 'debit'}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {allEntries.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+          <span className="text-[11px] text-slate-400">{allEntries.length} transaction{allEntries.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="text-emerald-700 font-semibold">−{formatCurrency(summary.totalPaid || 0)} paid</span>
+            <span className="text-rose-600 font-semibold">+{formatCurrency((summary.totalCharged || 0) + (summary.totalFines || 0))} charged</span>
           </div>
         </div>
       )}
