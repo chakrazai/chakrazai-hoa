@@ -142,6 +142,40 @@ async function seedDues(commId) {
   } catch (err) { console.error('⚠️  Dues seed failed:', err.message); }
 }
 
+async function seedViolations(commId) {
+  try {
+    const existing = await db.query('SELECT COUNT(*) AS cnt FROM violations WHERE community_id=$1', [commId]);
+    if (parseInt(existing.rows[0].cnt) > 0) {
+      console.log('✅ Violations already seeded, skipping');
+      return;
+    }
+    const SEED = [
+      { unit:'Unit 88',  type:'Parking',      description:'Vehicle in fire lane',               fine:75,  status:'notice_sent',       issuedDate:'2026-04-26' },
+      { unit:'Unit 12',  type:'Parking',       description:'Guest spot occupied 7+ days',        fine:50,  status:'hearing_pending',   issuedDate:'2026-04-24' },
+      { unit:'Unit 55',  type:'Landscaping',   description:'Unapproved front yard modification', fine:100, status:'escalated',         issuedDate:'2026-04-22' },
+      { unit:'Unit 119', type:'Landscaping',   description:'Dead landscaping not remedied',      fine:75,  status:'notice_sent',       issuedDate:'2026-04-18' },
+      { unit:'Unit 44',  type:'Noise',         description:'Repeated late-night disturbance',    fine:100, status:'hearing_scheduled', issuedDate:'2026-04-15' },
+      { unit:'Unit 33',  type:'Modification',  description:'Unapproved front door replacement',  fine:100, status:'under_review',      issuedDate:'2026-04-10' },
+      { unit:'Unit 7',   type:'Parking',       description:'Inoperable vehicle stored',          fine:75,  status:'second_notice',     issuedDate:'2026-04-08' },
+    ];
+    let seeded = 0;
+    for (const v of SEED) {
+      const res = await db.query('SELECT id FROM residents WHERE community_id=$1 AND unit=$2 LIMIT 1', [commId, v.unit]);
+      if (!res.rows.length) { console.warn(`⚠️  No resident found for ${v.unit}, skipping violation`); continue; }
+      await db.query(
+        `INSERT INTO violations (community_id, resident_id, type, description, fine, status, issued_date)
+         SELECT $1,$2,$3,$4,$5,$6,$7::date
+         WHERE NOT EXISTS (
+           SELECT 1 FROM violations WHERE community_id=$1 AND resident_id=$2 AND issued_date=$7::date
+         )`,
+        [commId, res.rows[0].id, v.type, v.description, v.fine, v.status, v.issuedDate]
+      );
+      seeded++;
+    }
+    console.log(`✅ Violations seed: ${seeded}/${SEED.length} violation(s) seeded`);
+  } catch (err) { console.error('⚠️  Violations seed failed:', err.message); }
+}
+
 async function seedResidents(commId) {
   const residents = [
     {
@@ -488,6 +522,7 @@ async function start() {
     await seedResidents(commId);
     await seedDues(commId);
     await seedInvoices(commId);
+    await seedViolations(commId);
   } catch (err) {
     console.error('⚠️  Seed warning:', err.message);
   }

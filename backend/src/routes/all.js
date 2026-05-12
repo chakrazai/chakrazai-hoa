@@ -137,7 +137,15 @@ const violationsRouter = express.Router();
 violationsRouter.use(requireAuth);
 violationsRouter.get('/', async (req, res, next) => {
   try {
-    const { rows } = await db.query('SELECT v.*, r.unit, r.owner_name as owner FROM violations v JOIN residents r ON v.resident_id=r.id WHERE v.community_id=$1 ORDER BY v.issued_date DESC', [req.query.community]);
+    const { rows } = await db.query(
+      `SELECT v.id, v.type, v.description, v.fine, v.status, v.hearing_date,
+              TO_CHAR(v.issued_date, 'Mon FMDD') AS "issuedDate",
+              r.unit, r.owner_name AS owner
+       FROM violations v
+       JOIN residents r ON v.resident_id = r.id
+       WHERE v.community_id = $1
+       ORDER BY v.issued_date DESC`,
+      [req.query.community]);
     res.json(rows);
   } catch (err) { next(err); }
 });
