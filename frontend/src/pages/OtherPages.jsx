@@ -50,7 +50,7 @@ export function Tax() {
 }
 
 // ─── Violations ───────────────────────────────────────────────────────────────
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, AlertTriangle, X, Check } from 'lucide-react';
 import { Table, Th, Td, Tr, Tabs } from '../components/ui';
