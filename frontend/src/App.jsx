@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Component } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Search, Bell, Plus } from 'lucide-react';
@@ -6,9 +6,7 @@ import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import { useAuthStore } from './hooks/useStore';
 
-// Lazy page imports
 import Dashboard from './pages/Dashboard';
-
 import { Compliance, Dues, Accounting, Tax, Violations, Maintenance, Vendors, Residents, Documents, Communications, Communities, BuildingPage, BoardMembersPage, ElectionsPage, MeetingsPage, BallotManagementPage, AmenitiesPage, PreferencesPage, FinancialsPage } from './pages/index.jsx';
 import Map from './pages/Map.jsx';
 import { PrivacyPolicyPage, TermsOfUsePage, LegalAcceptanceModal, getLegalAcceptance } from './pages/LegalPages.jsx';
@@ -28,6 +26,56 @@ const pageTitles = {
   preferences: 'Profile & Preferences',
 };
 
+class PageErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Page render error:', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+          <p className="text-sm font-semibold text-rose-600 mb-2">Page failed to load</p>
+          <p className="text-xs text-slate-400 mb-4">{String(this.state.error)}</p>
+          <button onClick={() => this.setState({ error: null })}
+            className="px-4 py-2 text-xs bg-navy-600 text-white rounded-lg hover:bg-navy-700">
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function renderPage(page, navigate, navParams) {
+  switch (page) {
+    case 'dashboard':      return <Dashboard onNavigate={navigate} />;
+    case 'compliance':     return <Compliance />;
+    case 'dues':           return <Dues />;
+    case 'accounting':     return <Accounting />;
+    case 'tax':            return <Tax />;
+    case 'financials':     return <FinancialsPage />;
+    case 'violations':     return <Violations />;
+    case 'maintenance':    return <Maintenance />;
+    case 'vendors':        return <Vendors />;
+    case 'residents':      return <Residents />;
+    case 'documents':      return <Documents />;
+    case 'communications': return <Communications navParams={navParams} />;
+    case 'amenities':      return <AmenitiesPage />;
+    case 'communities':    return <Communities onNavigate={navigate} />;
+    case 'map':            return <Map />;
+    case 'building':       return <BuildingPage />;
+    case 'boardmembers':   return <BoardMembersPage />;
+    case 'elections':      return <ElectionsPage />;
+    case 'ballots':        return <BallotManagementPage />;
+    case 'meetings':       return <MeetingsPage />;
+    case 'privacy':        return <PrivacyPolicyPage />;
+    case 'terms':          return <TermsOfUsePage />;
+    case 'preferences':    return <PreferencesPage />;
+    default:               return <Dashboard onNavigate={navigate} />;
+  }
+}
+
 function AppLayout() {
   const [page, setPage] = useState(() => localStorage.getItem('hoa_current_page') || 'dashboard');
   const [navParams, setNavParams] = useState(null);
@@ -44,36 +92,12 @@ function AppLayout() {
 
   if (!token) return <Navigate to="/login" />;
 
-  const pages = {
-    dashboard:      <Dashboard onNavigate={navigate} />,
-    compliance:     <Compliance />,
-    dues:           <Dues />,
-    accounting:     <Accounting />,
-    tax:            <Tax />,
-    financials:     <FinancialsPage />,
-    violations:     <Violations />,
-    maintenance:    <Maintenance />,
-    vendors:        <Vendors />,
-    residents:      <Residents />,
-    documents:      <Documents />,
-    communications: <Communications navParams={navParams} />,
-    amenities:      <AmenitiesPage />,
-    communities:    <Communities onNavigate={navigate} />,
-    map:            <Map />,
-    building:       <BuildingPage />,
-    boardmembers:   <BoardMembersPage />,
-    elections:      <ElectionsPage />,
-    ballots:        <BallotManagementPage />,
-    meetings:       <MeetingsPage />,
-    privacy:        <PrivacyPolicyPage />,
-    terms:          <TermsOfUsePage />,
-    preferences:    <PreferencesPage />,
-  };
+  const isMap = page === 'map';
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       {!legalAccepted && <LegalAcceptanceModal onAccept={() => setLegalAccepted(true)} />}
-      <Sidebar currentPage={page} onNavigate={setPage} />
+      <Sidebar currentPage={page} onNavigate={navigate} />
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Topbar */}
         <header className="h-13 bg-white border-b border-slate-100 flex items-center justify-between px-6 flex-shrink-0" style={{ height: 50 }}>
@@ -95,10 +119,12 @@ function AppLayout() {
 
         {/* Page content */}
         <main className="flex-1 overflow-hidden flex flex-col">
-          {page === 'map'
-            ? <div className="flex-1 overflow-hidden">{pages.map}</div>
-            : <div className="flex-1 overflow-y-auto"><div className="max-w-7xl mx-auto px-6 py-6">{pages[page] || pages.dashboard}</div></div>
-          }
+          <PageErrorBoundary key={page}>
+            {isMap
+              ? <div className="flex-1 overflow-hidden">{renderPage(page, navigate, navParams)}</div>
+              : <div className="flex-1 overflow-y-auto"><div className="max-w-7xl mx-auto px-6 py-6">{renderPage(page, navigate, navParams)}</div></div>
+            }
+          </PageErrorBoundary>
         </main>
       </div>
     </div>
