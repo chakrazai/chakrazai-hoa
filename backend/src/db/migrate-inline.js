@@ -247,6 +247,33 @@ ALTER TABLE residents ADD COLUMN IF NOT EXISTS common_area_fob_log JSONB DEFAULT
 ALTER TABLE residents ADD COLUMN IF NOT EXISTS electronic_voting_consent      BOOLEAN DEFAULT false;
 ALTER TABLE residents ADD COLUMN IF NOT EXISTS electronic_voting_consent_date DATE;
 ALTER TABLE residents ADD COLUMN IF NOT EXISTS electronic_statements          BOOLEAN DEFAULT false;
+CREATE TABLE IF NOT EXISTS vendor_invoices (
+  id             SERIAL PRIMARY KEY,
+  community_id   INTEGER REFERENCES communities(id) ON DELETE CASCADE,
+  vendor_name    VARCHAR(255) NOT NULL,
+  category       VARCHAR(100),
+  invoice_number VARCHAR(100),
+  invoice_date   VARCHAR(100),
+  due_date       VARCHAR(100),
+  amount         DECIMAL(10,2) NOT NULL,
+  description    TEXT,
+  status         VARCHAR(50) DEFAULT 'unpaid',
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS invoice_payments (
+  id           SERIAL PRIMARY KEY,
+  invoice_id   INTEGER REFERENCES vendor_invoices(id) ON DELETE CASCADE,
+  community_id INTEGER REFERENCES communities(id),
+  pay_date     VARCHAR(100),
+  amount       DECIMAL(10,2) NOT NULL,
+  method       VARCHAR(50),
+  reference    VARCHAR(255),
+  note         TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_invoices_commnum ON vendor_invoices(community_id, invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON invoice_payments(invoice_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_residents_community_unit ON residents (community_id, unit);
 CREATE INDEX IF NOT EXISTS idx_residents_community    ON residents(community_id);
 CREATE INDEX IF NOT EXISTS idx_dues_community         ON dues_accounts(community_id);

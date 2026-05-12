@@ -3,10 +3,11 @@ const authRoutes           = require('./auth');
 const electionsRouter      = require('./elections');
 const { communityRouter, duesRouter, complianceRouter, violationsRouter,
         maintenanceRouter, vendorRouter, residentRouter, documentRouter,
-        commRouter, accountingRouter, taxRouter } = require('./all');
+        commRouter, accountingRouter, taxRouter, invoiceRouter } = require('./all');
 
 module.exports = {
   authRoutes, communityRouter, duesRouter, complianceRouter,
   violationsRouter, maintenanceRouter, vendorRouter, residentRouter,
-  documentRouter, commRouter, accountingRouter, taxRouter, electionsRouter
+  documentRouter, commRouter, accountingRouter, taxRouter, electionsRouter,
+  invoiceRouter
 };

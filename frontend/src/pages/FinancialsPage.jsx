@@ -1,4 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { invoiceAPI } from '../lib/api';
+import { getCommunityId } from '../lib/community';
 import { clsx } from 'clsx';
 import {
   Plus, Download, FileText, Paperclip, X, ChevronDown, ChevronUp,
@@ -369,7 +372,7 @@ function InvoiceRow({ invoice, onPaymentAdded }) {
   const handlePaymentSaved = pay => {
     const next = [...payments, pay];
     setPayments(next);
-    onPaymentAdded(invoice.id, next);
+    onPaymentAdded(invoice.id, invoice.dbId, pay);
     setRecording(false);
   };
 
@@ -517,24 +520,43 @@ function InvoiceRow({ invoice, onPaymentAdded }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function FinancialsPage() {
-  const [extra, setExtra]   = useState(() => lsGet());
+  const communityId = getCommunityId();
+  const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [filter, setFilter]   = useState('all');
   const [search, setSearch]   = useState('');
 
-  const raw = [...extra, ...MOCK_INVOICES];
-  const invoices = raw.map(inv => ({
-    ...inv,
-    _status: deriveStatus(inv),
-    _paid: paidAmount(inv),
-    _bal: balance(inv),
-  }));
+  // Load invoices from DB; fall back to mock + localStorage if API unavailable
+  const { data: dbInvoices } = useQuery({
+    queryKey: ['invoices', communityId],
+    queryFn: () => invoiceAPI.list(communityId).then(r => r.data),
+    placeholderData: [],
+  });
 
-  // Metrics
-  const totalInvoiced   = invoices.reduce((s, i) => s + i.amount, 0);
+  const invoices = useMemo(() => {
+    const base = dbInvoices?.length
+      ? dbInvoices
+      : (() => {
+          const lsAll = lsGet();
+          const lsMap = {};
+          lsAll.forEach(i => { if (i.id) lsMap[i.id] = i; });
+          return [
+            ...lsAll.filter(i => !MOCK_INVOICES.find(m => m.id === i.id)),
+            ...MOCK_INVOICES.map(i => lsMap[i.id] || i),
+          ];
+        })();
+    return base.map(inv => ({
+      ...inv,
+      _status: deriveStatus(inv),
+      _paid: paidAmount(inv),
+      _bal: balance(inv),
+    }));
+  }, [dbInvoices]);
+
+  const totalInvoiced    = invoices.reduce((s, i) => s + i.amount, 0);
   const totalOutstanding = invoices.reduce((s, i) => s + i._bal, 0);
-  const totalOverdue    = invoices.filter(i => i.status === 'overdue').reduce((s, i) => s + i._bal, 0);
-  const paidThisMonth   = invoices.reduce((s, i) => s + i.payments.filter(p => p.date.includes('2026') && (p.date.includes('May') || p.date.includes('Apr'))).reduce((a, p) => a + p.amount, 0), 0);
+  const totalOverdue     = invoices.filter(i => i._status === 'overdue').reduce((s, i) => s + i._bal, 0);
+  const paidThisMonth    = invoices.reduce((s, i) => s + i.payments.filter(p => p.date.includes('2026') && (p.date.includes('May') || p.date.includes('Apr'))).reduce((a, p) => a + p.amount, 0), 0);
 
   const filtered = invoices.filter(inv => {
     const matchTab = filter === 'all' ? true
@@ -545,31 +567,41 @@ export default function FinancialsPage() {
     return matchTab && matchSearch;
   });
 
-  const handleAddInvoice = inv => {
-    const next = [inv, ...extra];
-    setExtra(next);
-    lsSave(next);
+  const handleAddInvoice = async inv => {
+    try {
+      await invoiceAPI.create({
+        communityId,
+        vendor: inv.vendor, category: inv.category,
+        invoiceNumber: inv.invoiceNumber, invoiceDate: inv.invoiceDate,
+        dueDate: inv.dueDate, amount: inv.amount, description: inv.description,
+      });
+      queryClient.invalidateQueries(['invoices', communityId]);
+    } catch {
+      // Fallback to localStorage when API unavailable
+      const next = [inv, ...lsGet()];
+      lsSave(next);
+    }
   };
 
-  const handlePaymentAdded = (invId, newPayments) => {
-    // Always persist to localStorage regardless of mock vs user-added
+  const handlePaymentAdded = async (invId, dbId, newPayment) => {
+    if (dbId) {
+      try {
+        await invoiceAPI.addPayment(dbId, {
+          communityId,
+          date: newPayment.date, amount: newPayment.amount,
+          method: newPayment.method, ref: newPayment.ref || '', note: newPayment.note || '',
+        });
+        queryClient.invalidateQueries(['invoices', communityId]);
+        return;
+      } catch { /* fall through to localStorage */ }
+    }
+    // localStorage fallback
     const lsAll = lsGet();
     const mockInv = MOCK_INVOICES.find(i => i.id === invId);
-    const extraInv = extra.find(i => i.id === invId);
-
-    if (extraInv) {
-      const next = extra.map(i => i.id === invId ? { ...i, payments: newPayments } : i);
-      setExtra(next);
-      lsSave(next);
-    } else if (mockInv) {
-      // Save mock invoice with payments into localStorage so vendor page can read it
-      const updated = { ...mockInv, payments: newPayments };
-      const existingIdx = lsAll.findIndex(i => i.id === invId);
-      const nextLs = existingIdx >= 0
-        ? lsAll.map(i => i.id === invId ? updated : i)
-        : [...lsAll, updated];
-      lsSave(nextLs);
-    }
+    const allPayments = [...(lsAll.find(i => i.id === invId)?.payments || mockInv?.payments || []), newPayment];
+    const updated = { ...(mockInv || { id: invId }), payments: allPayments };
+    const idx = lsAll.findIndex(i => i.id === invId);
+    lsSave(idx >= 0 ? lsAll.map(i => i.id === invId ? updated : i) : [...lsAll, updated]);
   };
 
   const TABS = [

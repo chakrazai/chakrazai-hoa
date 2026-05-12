@@ -79,6 +79,11 @@ export const communicationsAPI = {
   send:    (data)        => api.post('/api/communications/send', data),
   history: (communityId) => api.get(`/api/communications?community=${communityId}`),
 };
+export const invoiceAPI = {
+  list:       (communityId) => api.get(`/api/invoices?community=${communityId}`),
+  create:     (data)        => api.post('/api/invoices', data),
+  addPayment: (dbId, data)  => api.post(`/api/invoices/${dbId}/payments`, data),
+};
 export const accountingAPI = {
   summary:  (communityId) => api.get(`/api/accounting/summary?community=${communityId}`),
   expenses: (communityId) => api.get(`/api/accounting/expenses?community=${communityId}`),

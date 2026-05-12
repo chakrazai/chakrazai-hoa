@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Plus, CheckCircle, Clock, AlertTriangle, Circle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MetricCard, Card, CardHeader, Button, ProgressBar, SectionHeader, formatCurrency, Badge } from '../components/ui';
-import { accountingAPI } from '../lib/api';
+import { accountingAPI, invoiceAPI } from '../lib/api';
+import { getCommunityId } from '../lib/community';
 import { clsx } from 'clsx';
 
 const MOCK_SUMMARY = { operatingBalance:48320, reserveBalance:184200, reservePct:61, monthlyIncome:22348, monthlyExpenses:18205, netIncome:4143 };
@@ -73,11 +74,12 @@ const METHOD_COLORS = {
 };
 
 export default function Accounting() {
-  const { data: summary } = useQuery({ queryKey:['accounting-summary'], queryFn:()=>accountingAPI.summary(1).then(r=>r.data), placeholderData:MOCK_SUMMARY });
-  const { data: history }  = useQuery({ queryKey:['accounting-history'], queryFn:()=>accountingAPI.history(1).then(r=>r.data),  placeholderData:MOCK_HISTORY  });
+  const communityId = getCommunityId();
+  const { data: summary } = useQuery({ queryKey:['accounting-summary'], queryFn:()=>accountingAPI.summary(communityId).then(r=>r.data), placeholderData:MOCK_SUMMARY });
+  const { data: history }  = useQuery({ queryKey:['accounting-history'], queryFn:()=>accountingAPI.history(communityId).then(r=>r.data),  placeholderData:MOCK_HISTORY  });
 
-  // Read live invoice + payment data from shared localStorage store
-  const [invoices] = useState(() => readInvoices());
+  const { data: dbInvoices = [] } = useQuery({ queryKey:['invoices', communityId], queryFn:()=>invoiceAPI.list(communityId).then(r=>r.data), placeholderData:[] });
+  const invoices = useMemo(() => dbInvoices.length ? dbInvoices : readInvoices(), [dbInvoices]);
 
   const s = summary || MOCK_SUMMARY;
   const h = history || MOCK_HISTORY;

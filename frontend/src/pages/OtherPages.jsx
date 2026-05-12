@@ -51,7 +51,7 @@ export function Tax() {
 
 // ─── Violations ───────────────────────────────────────────────────────────────
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, AlertTriangle, X, Check } from 'lucide-react';
 import { Table, Th, Td, Tr, Tabs } from '../components/ui';
 import { violationsAPI, residentAPI as vResidentAPI } from '../lib/api';
@@ -330,7 +330,7 @@ export function Maintenance() {
 }
 
 // ─── Vendors ──────────────────────────────────────────────────────────────────
-import { vendorAPI } from '../lib/api';
+import { vendorAPI, invoiceAPI as vInvoiceAPI } from '../lib/api';
 import { CheckCircle, Clock, Circle, CreditCard as VCreditCard, ChevronUp, ChevronDown as ChevDown2 } from 'lucide-react';
 
 // ─── Vendor Invoice helpers (shared data with FinancialsPage via localStorage) ─
@@ -423,7 +423,7 @@ function VInvoiceRow({ invoice, onPaymentAdded }) {
   const rawSt = paid >= invoice.amount ? 'paid' : paid > 0 ? 'partial' : invoice.status;
   const meta  = V_STATUS_META[rawSt] || V_STATUS_META.unpaid;
   const pct   = Math.min(100, invoice.amount > 0 ? Math.round(paid / invoice.amount * 100) : 0);
-  const handlePay = pay => { const next = [...payments, pay]; setPayments(next); onPaymentAdded(invoice.id, next); setRecording(false); };
+  const handlePay = pay => { const next = [...payments, pay]; setPayments(next); onPaymentAdded(invoice.id, next, pay); setRecording(false); };
   const fakeInv = { ...invoice, payments, amount: invoice.amount };
 
   return (
@@ -594,14 +594,22 @@ function VendorDetailPage({ vendor, onBack }) {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody]   = useState('');
   const [composeSent, setComposeSent]   = useState(false);
-  const [vendorInvoices, setVendorInvoices] = useState(() => {
+  const vendorCommId = getCommunityId();
+  const vendorQC = useQueryClient();
+  const { data: allDbInvoices = [] } = useQuery({
+    queryKey: ['invoices', vendorCommId],
+    queryFn: () => vInvoiceAPI.list(vendorCommId).then(r => r.data),
+    placeholderData: [],
+  });
+  const vendorInvoices = useMemo(() => {
+    if (allDbInvoices.length) return allDbInvoices.filter(i => i.vendor === vendor.name);
     const lsAll = invLsGet();
     const lsMap = {};
     lsAll.forEach(i => { if (i.id) lsMap[i.id] = i; });
     const mockForVendor = VENDOR_MOCK_INVOICES.filter(i => i.vendor === vendor.name).map(i => lsMap[i.id] || i);
     const userAdded = lsAll.filter(i => i.vendor === vendor.name && !VENDOR_MOCK_INVOICES.find(m => m.id === i.id));
     return [...userAdded, ...mockForVendor];
-  });
+  }, [allDbInvoices, vendor.name]);
   const [showAddInv, setShowAddInv] = useState(false);
   const uploadRef  = useRef(null);
   const addDocRef  = useRef(null);
@@ -661,19 +669,29 @@ function VendorDetailPage({ vendor, onBack }) {
     setComposeSent(true); setComposeSubject(''); setComposeBody('');
   };
 
-  const handleVendorPayment = (invId, newPayments) => {
+  const handleVendorPayment = async (invId, _allPayments, newPay) => {
     const inv = vendorInvoices.find(i => i.id === invId);
+    if (inv?.dbId) {
+      try {
+        await vInvoiceAPI.addPayment(inv.dbId, { communityId: vendorCommId, date: newPay.date, amount: newPay.amount, method: newPay.method, ref: newPay.ref || '', note: newPay.note || '' });
+        vendorQC.invalidateQueries(['invoices', vendorCommId]);
+        return;
+      } catch { /* fall through to localStorage */ }
+    }
     if (!inv) return;
-    const updated = { ...inv, payments: newPayments };
-    setVendorInvoices(prev => prev.map(i => i.id === invId ? updated : i));
+    const updated = { ...inv, payments: _allPayments };
     const lsAll = invLsGet();
     const idx = lsAll.findIndex(i => i.id === invId);
     invLsSave(idx >= 0 ? lsAll.map(i => i.id === invId ? updated : i) : [...lsAll, updated]);
   };
 
-  const handleAddVendorInvoice = inv => {
-    setVendorInvoices(prev => [inv, ...prev]);
-    invLsSave([inv, ...invLsGet()]);
+  const handleAddVendorInvoice = async inv => {
+    try {
+      await vInvoiceAPI.create({ communityId: vendorCommId, vendor: inv.vendor, category: inv.category, invoiceNumber: inv.invoiceNumber, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, amount: inv.amount, description: inv.description });
+      vendorQC.invalidateQueries(['invoices', vendorCommId]);
+    } catch {
+      invLsSave([inv, ...invLsGet()]);
+    }
   };
 
   const StatCard = ({ label, value }) => (

@@ -11,7 +11,7 @@ const electionsRouter = require('./routes/elections');
 const {
   communityRouter, duesRouter, complianceRouter, violationsRouter,
   maintenanceRouter, vendorRouter, residentRouter, documentRouter,
-  commRouter, accountingRouter, taxRouter
+  commRouter, accountingRouter, taxRouter, invoiceRouter
 } = require('./routes/all');
 
 const app  = express();
@@ -37,6 +37,7 @@ app.use('/api/communications', commRouter);
 app.use('/api/accounting',     accountingRouter);
 app.use('/api/tax',            taxRouter);
 app.use('/api/elections',      electionsRouter);
+app.use('/api/invoices',       invoiceRouter);
 
 app.get('/health', (req, res) => res.json({ status:'ok', ts: new Date().toISOString() }));
 app.get('/api/ping', async (req, res) => {
@@ -55,6 +56,44 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.status||500).json({ message: err.message });
 });
+
+async function seedInvoices(commId) {
+  const MOCK = [
+    { vendor:'Greenscape Landscaping', category:'Landscaping',       invNum:'GS-2026-041', invDate:'May 2, 2026',  dueDate:'May 15, 2026', amount:4200, desc:'April 2026 landscaping services — 4 visits, mowing, trimming, seasonal planting', status:'unpaid',  payments:[] },
+    { vendor:'AquaCare Pool Services', category:'Pool & Spa',        invNum:'AQ-2026-051', invDate:'May 1, 2026',  dueDate:'Jun 1, 2026',  amount:1800, desc:'May 2026 pool & spa maintenance — 8 visits, chemical balancing', status:'unpaid',  payments:[] },
+    { vendor:'ProPlumb Emergency',     category:'Plumbing',          invNum:'PP-2026-0418',invDate:'Apr 19, 2026', dueDate:'May 19, 2026', amount:1840, desc:'Emergency main water line repair Apr 18', status:'paid',    payments:[{date:'Apr 28, 2026',amount:1840,method:'Check',ref:'#4521',note:'Full payment'}] },
+    { vendor:'SecureWatch Security',   category:'Security',          invNum:'SW-2026-MAY', invDate:'May 1, 2026',  dueDate:'May 15, 2026', amount:3200, desc:'May 2026 security guard services + camera monitoring', status:'partial', payments:[{date:'May 5, 2026',amount:1600,method:'ACH',ref:'ACH-8821',note:'First installment — 50%'}] },
+    { vendor:'Greenscape Landscaping', category:'Landscaping',       invNum:'GS-2026-031', invDate:'Apr 1, 2026',  dueDate:'Apr 15, 2026', amount:4200, desc:'March 2026 landscaping services — 4 visits', status:'paid',    payments:[{date:'Apr 8, 2026',amount:4200,method:'Check',ref:'#4498',note:'Full payment'}] },
+    { vendor:'PaintRight Contractors', category:'Painting & General',invNum:'PR-2026-002', invDate:'Apr 15, 2026', dueDate:'May 1, 2026',  amount:6000, desc:'Building A exterior painting — Phase 1 deposit + Phase 2 progress payment', status:'partial', payments:[{date:'Apr 20, 2026',amount:3000,method:'Check',ref:'#4510',note:'50% deposit per contract'},{date:'May 1, 2026',amount:2000,method:'ACH',ref:'ACH-9103',note:'Progress payment — Phase 2 milestone'}] },
+    { vendor:'AquaCare Pool Services', category:'Pool & Spa',        invNum:'AQ-2026-041', invDate:'Apr 1, 2026',  dueDate:'May 1, 2026',  amount:1800, desc:'April 2026 pool & spa maintenance — partial payment pending COI resolution', status:'overdue', payments:[{date:'Apr 25, 2026',amount:900,method:'ACH',ref:'ACH-8740',note:'Partial — holding balance pending COI renewal'}] },
+    { vendor:'SecureLock Inc.',        category:'Locksmith & Gates', invNum:'SL-2026-Q1',  invDate:'Mar 31, 2026', dueDate:'Apr 15, 2026', amount:1700, desc:'Q1 2026 gate PM + FOB programming + emergency lockout', status:'paid',    payments:[{date:'Apr 10, 2026',amount:1700,method:'Check',ref:'#4505',note:'Full payment'}] },
+    { vendor:'Metro Collection Group', category:'Collections',       invNum:'MCG-2026-Q1', invDate:'Apr 1, 2026',  dueDate:'Apr 30, 2026', amount:630,  desc:'Q1 2026 collections services — 15% contingency on $4,200 collected', status:'paid',    payments:[{date:'Apr 22, 2026',amount:630,method:'ACH',ref:'ACH-8801',note:'Full payment'}] },
+    { vendor:'SecureWatch Security',   category:'Security',          invNum:'SW-2026-APR', invDate:'Apr 1, 2026',  dueDate:'Apr 15, 2026', amount:3200, desc:'April 2026 security guard services + camera monitoring', status:'paid',    payments:[{date:'Apr 12, 2026',amount:2000,method:'Check',ref:'#4502',note:'First installment'},{date:'Apr 20, 2026',amount:1200,method:'ACH',ref:'ACH-8720',note:'Balance — final installment'}] },
+  ];
+  let inserted = 0;
+  for (const m of MOCK) {
+    try {
+      const { rows } = await db.query(
+        `INSERT INTO vendor_invoices (community_id, vendor_name, category, invoice_number, invoice_date, due_date, amount, description, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (community_id, invoice_number) DO NOTHING
+         RETURNING id`,
+        [commId, m.vendor, m.category, m.invNum, m.invDate, m.dueDate, m.amount, m.desc, m.status]
+      );
+      if (rows.length) {
+        for (const p of m.payments) {
+          await db.query(
+            `INSERT INTO invoice_payments (invoice_id, community_id, pay_date, amount, method, reference, note)
+             SELECT $1,$2,$3,$4,$5,$6,$7 WHERE NOT EXISTS (SELECT 1 FROM invoice_payments WHERE invoice_id=$1 AND pay_date=$3 AND amount=$4)`,
+            [rows[0].id, commId, p.date, p.amount, p.method, p.ref || null, p.note || null]
+          );
+        }
+        inserted++;
+      }
+    } catch (err) { console.error(`⚠️  Invoice seed failed for ${m.invNum}:`, err.message); }
+  }
+  console.log(`✅ Invoice seed: ${inserted}/10 invoice(s) seeded`);
+}
 
 async function seedResidents(commId) {
   const residents = [
@@ -370,6 +409,7 @@ async function start() {
 
     // ── Resident seed ──────────────────────────────────────────────────────────
     await seedResidents(commId);
+    await seedInvoices(commId);
   } catch (err) {
     console.error('⚠️  Seed warning:', err.message);
   }

@@ -275,4 +275,89 @@ taxRouter.get('/', (req, res) => res.json([
   { id:4, name:'Homeowner Year-End Statements',     desc:'148 statements generated & distributed', due:'January 31, 2026', status:'distributed' },
 ]));
 
-module.exports = { communityRouter, duesRouter, complianceRouter, violationsRouter, maintenanceRouter, vendorRouter, residentRouter, documentRouter, commRouter, accountingRouter, taxRouter };
+// ─── Vendor Invoices ──────────────────────────────────────────────────────────
+const invoiceRouter = express.Router();
+invoiceRouter.use(requireAuth);
+
+invoiceRouter.get('/', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT vi.*,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', ip.id,
+                'date', ip.pay_date,
+                'amount', ip.amount::float,
+                'method', ip.method,
+                'ref', ip.reference,
+                'note', ip.note
+              ) ORDER BY ip.created_at
+            ) FILTER (WHERE ip.id IS NOT NULL),
+            '[]'
+          ) as payments
+       FROM vendor_invoices vi
+       LEFT JOIN invoice_payments ip ON ip.invoice_id = vi.id
+       WHERE vi.community_id = $1
+       GROUP BY vi.id
+       ORDER BY vi.created_at DESC`,
+      [req.query.community]
+    );
+    res.json(rows.map(r => ({
+      id: `DB-${r.id}`,
+      dbId: r.id,
+      vendor: r.vendor_name,
+      category: r.category,
+      invoiceNumber: r.invoice_number,
+      invoiceDate: r.invoice_date,
+      dueDate: r.due_date,
+      amount: parseFloat(r.amount),
+      description: r.description,
+      status: r.status,
+      payments: (r.payments || []).map(p => ({ ...p, amount: parseFloat(p.amount) })),
+    })));
+  } catch (err) { next(err); }
+});
+
+invoiceRouter.post('/', async (req, res, next) => {
+  try {
+    const { communityId, vendor, category, invoiceNumber, invoiceDate, dueDate, amount, description } = req.body;
+    const { rows } = await db.query(
+      `INSERT INTO vendor_invoices (community_id, vendor_name, category, invoice_number, invoice_date, due_date, amount, description, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'unpaid')
+       ON CONFLICT (community_id, invoice_number) DO UPDATE SET
+         vendor_name=EXCLUDED.vendor_name, category=EXCLUDED.category,
+         invoice_date=EXCLUDED.invoice_date, due_date=EXCLUDED.due_date,
+         amount=EXCLUDED.amount, description=EXCLUDED.description, updated_at=NOW()
+       RETURNING *`,
+      [communityId, vendor, category, invoiceNumber, invoiceDate, dueDate, amount, description]
+    );
+    res.status(201).json({ id: `DB-${rows[0].id}`, dbId: rows[0].id, vendor: rows[0].vendor_name, category: rows[0].category, invoiceNumber: rows[0].invoice_number, invoiceDate: rows[0].invoice_date, dueDate: rows[0].due_date, amount: parseFloat(rows[0].amount), description: rows[0].description, status: rows[0].status, payments: [] });
+  } catch (err) { next(err); }
+});
+
+invoiceRouter.post('/:id/payments', async (req, res, next) => {
+  try {
+    const dbId = req.params.id;
+    const { communityId, date, amount, method, ref, note } = req.body;
+    const { rows } = await db.query(
+      `INSERT INTO invoice_payments (invoice_id, community_id, pay_date, amount, method, reference, note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [dbId, communityId, date, amount, method, ref || null, note || null]
+    );
+    const { rows: sumRows } = await db.query(
+      'SELECT COALESCE(SUM(amount),0) as total, vi.amount as inv_amount FROM invoice_payments ip JOIN vendor_invoices vi ON vi.id=ip.invoice_id WHERE ip.invoice_id=$1 GROUP BY vi.amount',
+      [dbId]
+    );
+    if (sumRows.length) {
+      const paid = parseFloat(sumRows[0].total);
+      const total = parseFloat(sumRows[0].inv_amount);
+      const newStatus = paid >= total ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+      await db.query('UPDATE vendor_invoices SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, dbId]);
+    }
+    const p = rows[0];
+    res.status(201).json({ id: `PAY-DB-${p.id}`, date: p.pay_date, amount: parseFloat(p.amount), method: p.method, ref: p.reference, note: p.note });
+  } catch (err) { next(err); }
+});
+
+module.exports = { communityRouter, duesRouter, complianceRouter, violationsRouter, maintenanceRouter, vendorRouter, residentRouter, documentRouter, commRouter, accountingRouter, taxRouter, invoiceRouter };
