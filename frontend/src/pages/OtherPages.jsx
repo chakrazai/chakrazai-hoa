@@ -1,6 +1,6 @@
 // ─── Tax ─────────────────────────────────────────────────────────────────────
 import { Download, Receipt } from 'lucide-react';
-import { MetricCard, Card, Badge, Alert, Button, SectionHeader, formatCurrency } from '../components/ui';
+import { MetricCard, Card, Badge, Alert, Button, SectionHeader, formatCurrency, DateField } from '../components/ui';
 
 const TAX_DOCS = [
   { id:1, name:'Form 1120-H — Federal HOA Return', desc:'Auto-populated from 2025 annual data',   due:'April 15, 2026',   status:'ready'       },
@@ -127,7 +127,7 @@ function NewViolationModal({ onSave, onClose }) {
           </div>
           <div>
             <label className={lV}>Issued Date</label>
-            <input type="date" value={form.issuedDate} onChange={e => set('issuedDate')(e.target.value)} className={iV} />
+            <DateField value={form.issuedDate} onChange={e => set('issuedDate')(e.target.value)} className={iV} />
           </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
@@ -247,7 +247,7 @@ function NewWorkOrderModal({ onSave, onClose }) {
             </div>
             <div>
               <label className={lV}>Scheduled Date</label>
-              <input type="date" value={form.scheduledDate} onChange={e => set('scheduledDate')(e.target.value)} className={iV} />
+              <DateField value={form.scheduledDate} onChange={e => set('scheduledDate')(e.target.value)} className={iV} />
             </div>
           </div>
           <div>
@@ -398,7 +398,7 @@ function VRecordPayPanel({ invoice, onSave, onClose }) {
       </div>
       {err && <p className="text-[11px] text-rose-600 font-medium">{err}</p>}
       <div className="grid grid-cols-2 gap-2">
-        <div><label className="block text-xs font-medium text-slate-500 mb-1">Date *</label><input type="date" value={form.date} onChange={e => f('date')(e.target.value)} className={iV2}/></div>
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">Date *</label><DateField value={form.date} onChange={e => f('date')(e.target.value)} className={iV2}/></div>
         <div><label className="block text-xs font-medium text-slate-500 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => f('amount')(e.target.value)} className={iV2}/></div>
         <div><label className="block text-xs font-medium text-slate-500 mb-1">Method</label><select value={form.method} onChange={e => f('method')(e.target.value)} className={iV2}>{V_PMETHODS.map(m => <option key={m}>{m}</option>)}</select></div>
         <div><label className="block text-xs font-medium text-slate-500 mb-1">{form.method === 'Check' ? 'Check #' : 'Reference'}</label><input value={form.ref} onChange={e => f('ref')(e.target.value)} className={iV2} placeholder={form.method === 'Check' ? '#1234' : 'ACH-00123'}/></div>
@@ -552,12 +552,12 @@ function VendorAddInvoiceModal({ vendor, onClose, onSave }) {
             </div>
             <div>
               <label className={lV2}>Invoice Date *</label>
-              <input type="date" value={form.invoiceDate} onChange={e => f('invoiceDate')(e.target.value)} className={clsx(iV2, errors.invoiceDate && 'border-rose-300')}/>
+              <DateField value={form.invoiceDate} onChange={e => f('invoiceDate')(e.target.value)} className={clsx(iV2, errors.invoiceDate && 'border-rose-300')}/>
               {errors.invoiceDate && <p className="text-[11px] text-rose-500 mt-1">{errors.invoiceDate}</p>}
             </div>
             <div>
               <label className={lV2}>Due Date *</label>
-              <input type="date" value={form.dueDate} onChange={e => f('dueDate')(e.target.value)} className={clsx(iV2, errors.dueDate && 'border-rose-300')}/>
+              <DateField value={form.dueDate} onChange={e => f('dueDate')(e.target.value)} className={clsx(iV2, errors.dueDate && 'border-rose-300')}/>
               {errors.dueDate && <p className="text-[11px] text-rose-500 mt-1">{errors.dueDate}</p>}
             </div>
             <div className="col-span-2">
@@ -824,11 +824,11 @@ function VendorDetailPage({ vendor, onBack }) {
                 </div>
                 <div>
                   <label className={lbl}>Start Date</label>
-                  <input type="date" value={addForm.start} onChange={e => setAddForm(p => ({...p, start: e.target.value}))} className={inp}/>
+                  <DateField value={addForm.start} onChange={e => setAddForm(p => ({...p, start: e.target.value}))} className={inp}/>
                 </div>
                 <div>
                   <label className={lbl}>Expiry Date</label>
-                  <input type="date" value={addForm.end} onChange={e => setAddForm(p => ({...p, end: e.target.value}))} className={inp}/>
+                  <DateField value={addForm.end} onChange={e => setAddForm(p => ({...p, end: e.target.value}))} className={inp}/>
                 </div>
                 <div>
                   <label className={lbl}>Annual Value ($)</label>
@@ -915,7 +915,7 @@ function VendorDetailPage({ vendor, onBack }) {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[11px] text-slate-400 mb-1">New Expiry Date *</label>
-                        <input type="date" value={renewForm.newEnd} onChange={e => setRenewForm(p => ({...p, newEnd: e.target.value}))}
+                        <DateField value={renewForm.newEnd} onChange={e => setRenewForm(p => ({...p, newEnd: e.target.value}))}
                           className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-400"/>
                       </div>
                       <div className="flex items-end pb-1.5">
@@ -1222,7 +1222,7 @@ function AddVendorModal({ onClose, onSave }) {
               </div>
               <div>
                 <label className={lbl}>COI Expiry Date</label>
-                <input type="date" value={form.coiExp} onChange={e => f('coiExp')(e.target.value)} className={inp}/>
+                <DateField value={form.coiExp} onChange={e => f('coiExp')(e.target.value)} className={inp}/>
               </div>
               <div className="col-span-2 flex items-center gap-2 py-1">
                 <input type="checkbox" id="w9chk" checked={form.w9} onChange={e => f('w9')(e.target.checked)} className="w-4 h-4 accent-navy-600 flex-shrink-0"/>
@@ -1236,11 +1236,11 @@ function AddVendorModal({ onClose, onSave }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={lbl}>Contract Start Date</label>
-                <input type="date" value={form.contractStart} onChange={e => f('contractStart')(e.target.value)} className={inp}/>
+                <DateField value={form.contractStart} onChange={e => f('contractStart')(e.target.value)} className={inp}/>
               </div>
               <div>
                 <label className={lbl}>Contract Expiry Date</label>
-                <input type="date" value={form.contractExp} onChange={e => f('contractExp')(e.target.value)} className={inp}/>
+                <DateField value={form.contractExp} onChange={e => f('contractExp')(e.target.value)} className={inp}/>
               </div>
               <div>
                 <label className={lbl}>Estimated Annual Spend ($)</label>

@@ -1,5 +1,57 @@
+import { useRef } from 'react';
 import { clsx } from 'clsx';
-import { CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
+import { CheckCircle, AlertTriangle, AlertCircle, Info, Calendar } from 'lucide-react';
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+// "Apr 28, 2026"  →  "2026-04-28"  (for HTML date input value)
+export const toInputDate = (str) => {
+  if (!str) return '';
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+};
+// "2026-04-28"  →  "Apr 28, 2026"  (for storing formatted display string)
+export const fromInputDate = (val) => {
+  if (!val) return '';
+  const d = new Date(val + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// ─── DateField ────────────────────────────────────────────────────────────────
+export function DateField({ value, onChange, className, error, min, max, required, label }) {
+  const ref = useRef(null);
+  return (
+    <div>
+      {label && (
+        <label className="block text-xs font-medium text-slate-500 mb-1.5">
+          {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
+        </label>
+      )}
+      <div className="relative">
+        <input
+          ref={ref}
+          type="date"
+          value={value || ''}
+          onChange={onChange}
+          min={min}
+          max={max}
+          required={required}
+          className={clsx(
+            'w-full pr-8',
+            '[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:w-9 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer',
+            error ? 'border-rose-300' : '',
+            className,
+          )}
+        />
+        <button type="button" tabIndex={-1}
+          onClick={() => ref.current?.showPicker?.()}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-navy-500 hover:text-navy-700 transition-colors pointer-events-none">
+          <Calendar size={13} />
+        </button>
+      </div>
+      {error && <p className="text-xs text-rose-600 mt-1">{error}</p>}
+    </div>
+  );
+}
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
 const badgeVariants = {

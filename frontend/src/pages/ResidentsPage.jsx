@@ -11,7 +11,7 @@ import { getResidentFloor } from './BuildingPage';
 import { clsx } from 'clsx';
 import {
   Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr,
-  MetricCard, formatCurrency,
+  MetricCard, formatCurrency, DateField, toInputDate, fromInputDate,
 } from '../components/ui';
 
 // ─── Shared style helpers ─────────────────────────────────────────────────────
@@ -409,11 +409,11 @@ function AddResidentModal({ onSave, onClose }) {
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className={fLabel}>Move-in Date</label>
-                <input type="date" value={form.moveInDate} onChange={e => set('moveInDate')(e.target.value)} className={iCls()} />
+                <DateField value={form.moveInDate} onChange={e => set('moveInDate')(e.target.value)} className={iCls()} />
               </div>
               <div>
                 <label className={fLabel}>Move-out Date</label>
-                <input type="date" value={form.moveOutDate} onChange={e => set('moveOutDate')(e.target.value)} className={iCls()} />
+                <DateField value={form.moveOutDate} onChange={e => set('moveOutDate')(e.target.value)} className={iCls()} />
                 <p className="text-[11px] text-slate-400 mt-0.5">(leave blank if still residing)</p>
               </div>
             </div>
@@ -527,8 +527,8 @@ function OverviewTab({ r, onUpdate }) {
           <div />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={fLabel}>Move-in Date</label><input type="date" value={draft.moveInDate} onChange={e => d('moveInDate')(e.target.value)} className={iCls()} /></div>
-          <div><label className={fLabel}>Move-out Date</label><input type="date" value={draft.moveOutDate} onChange={e => d('moveOutDate')(e.target.value)} className={iCls()} /></div>
+          <div><label className={fLabel}>Move-in Date</label><DateField value={draft.moveInDate} onChange={e => d('moveInDate')(e.target.value)} className={iCls()} /></div>
+          <div><label className={fLabel}>Move-out Date</label><DateField value={draft.moveOutDate} onChange={e => d('moveOutDate')(e.target.value)} className={iCls()} /></div>
         </div>
         <div className="flex items-center gap-2">
           <input type="checkbox" id="ep-ap" checked={draft.autoPay} onChange={e => d('autoPay')(e.target.checked)} className="w-4 h-4 rounded border-slate-300" />
@@ -573,7 +573,7 @@ function OverviewTab({ r, onUpdate }) {
           {draft.electronicVoting && (
             <div className="pl-1">
               <label className={fLabel}>Consent Date</label>
-              <input type="date" value={draft.electronicVotingConsentDate}
+              <DateField value={draft.electronicVotingConsentDate}
                 onChange={e => d('electronicVotingConsentDate')(e.target.value)}
                 className={iCls()}/>
             </div>
@@ -931,8 +931,8 @@ function ParkingTab({ r, onUpdate }) {
           </div>
           <div><label className={fLabel}>Vehicle</label><input value={tagDraft.vehicle} onChange={e => setTagDraft(d => ({ ...d, vehicle: e.target.value }))} placeholder="Year Make Model" className={iCls()} /></div>
           <div className="grid grid-cols-2 gap-2">
-            <div><label className={fLabel}>Issued</label><input value={tagDraft.issuedDate} onChange={e => setTagDraft(d => ({ ...d, issuedDate: e.target.value }))} placeholder="Jan 1, 2026" className={iCls()} /></div>
-            <div><label className={fLabel}>Expires</label><input value={tagDraft.expiryDate} onChange={e => setTagDraft(d => ({ ...d, expiryDate: e.target.value }))} placeholder="Jan 1, 2027" className={iCls()} /></div>
+            <div><label className={fLabel}>Issued</label><DateField value={toInputDate(tagDraft.issuedDate)} onChange={e => setTagDraft(d => ({ ...d, issuedDate: fromInputDate(e.target.value) }))} className={iCls()} /></div>
+            <div><label className={fLabel}>Expires</label><DateField value={toInputDate(tagDraft.expiryDate)} onChange={e => setTagDraft(d => ({ ...d, expiryDate: fromInputDate(e.target.value) }))} className={iCls()} /></div>
           </div>
           <div className="flex gap-2 pt-1">
             <Button variant="primary" size="sm" onClick={addTag}><Check size={11} />Save</Button>
@@ -1390,8 +1390,8 @@ function TenantsTab({ r, onUpdate }) {
           <div><label className={fLabel}>Email</label><input type="email" value={draft.email} onChange={e => td('email')(e.target.value)} placeholder="Optional" className={iCls()} /></div>
           <div><label className={fLabel}>Address</label><input value={draft.address} onChange={e => td('address')(e.target.value)} placeholder="Tenant address" className={iCls()} /></div>
           <div className="grid grid-cols-2 gap-2">
-            <div><label className={fLabel}>Move-in Date</label><input type="date" value={draft.moveInDate} onChange={e => td('moveInDate')(e.target.value)} className={iCls()} /></div>
-            <div><label className={fLabel}>Move-out Date</label><input type="date" value={draft.moveOutDate} onChange={e => td('moveOutDate')(e.target.value)} className={iCls()} /></div>
+            <div><label className={fLabel}>Move-in Date</label><DateField value={draft.moveInDate} onChange={e => td('moveInDate')(e.target.value)} className={iCls()} /></div>
+            <div><label className={fLabel}>Move-out Date</label><DateField value={draft.moveOutDate} onChange={e => td('moveOutDate')(e.target.value)} className={iCls()} /></div>
           </div>
           <div><label className={fLabel}>Notes</label><input value={draft.notes} onChange={e => td('notes')(e.target.value)} placeholder="Optional notes" className={iCls()} /></div>
           <div className="flex gap-2 pt-1">

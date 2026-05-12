@@ -6,7 +6,7 @@ import {
   Search, BarChart2, User, Printer, Award, ClipboardList, ExternalLink, AlertTriangle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard } from '../components/ui';
+import { Card, Badge, Button, SectionHeader, Tabs, Table, Th, Td, Tr, MetricCard, DateField, toInputDate, fromInputDate } from '../components/ui';
 import { electionsAPI, residentAPI } from '../lib/api';
 import { getCommunityId, resolveCommunityId } from '../lib/community';
 
@@ -1117,8 +1117,8 @@ export function ElectionsPage() {
                 <div><label className={fLabel}>Status</label><select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} className={selCls}>{['upcoming','active','closed'].map(t=><option key={t}>{t}</option>)}</select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={fLabel}>Start Date</label><input type="date" value={form.startDate} onChange={e=>setForm(p=>({...p,startDate:e.target.value}))} className={iCls}/></div>
-                <div><label className={fLabel}>End Date</label><input type="date" value={form.endDate} onChange={e=>setForm(p=>({...p,endDate:e.target.value}))} className={iCls}/></div>
+                <div><label className={fLabel}>Start Date</label><DateField value={form.startDate} onChange={e=>setForm(p=>({...p,startDate:e.target.value}))} className={iCls}/></div>
+                <div><label className={fLabel}>End Date</label><DateField value={form.endDate} onChange={e=>setForm(p=>({...p,endDate:e.target.value}))} className={iCls}/></div>
               </div>
               <div><label className={fLabel}>Description</label><textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={3} className={iCls}/></div>
               <div className="grid grid-cols-2 gap-3">
@@ -1500,7 +1500,7 @@ export function MeetingsPage() {
                 <div><label className={fLabel}>Status</label><select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} className={selCls}>{['scheduled','completed','cancelled'].map(t=><option key={t}>{t}</option>)}</select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={fLabel}>Date</label><input value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} placeholder="Jun 15, 2026" className={iCls}/></div>
+                <div><label className={fLabel}>Date</label><DateField value={toInputDate(form.date)} onChange={e=>setForm(p=>({...p,date:fromInputDate(e.target.value)}))} className={iCls}/></div>
                 <div><label className={fLabel}>Time</label><input value={form.time} onChange={e=>setForm(p=>({...p,time:e.target.value}))} placeholder="6:00 PM" className={iCls}/></div>
               </div>
               <div><label className={fLabel}>Location</label><input value={form.location} onChange={e=>setForm(p=>({...p,location:e.target.value}))} placeholder="Clubhouse — Room A" className={iCls}/></div>

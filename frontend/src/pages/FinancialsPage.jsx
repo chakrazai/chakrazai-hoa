@@ -7,7 +7,7 @@ import {
   Plus, Download, FileText, Paperclip, X, ChevronDown, ChevronUp,
   CheckCircle, Clock, AlertTriangle, Circle, CreditCard, Building2,
 } from 'lucide-react';
-import { Card, Badge, Button, SectionHeader, MetricCard, formatCurrency } from '../components/ui';
+import { Card, Badge, Button, SectionHeader, MetricCard, formatCurrency, DateField } from '../components/ui';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
@@ -231,12 +231,12 @@ function AddInvoiceModal({ onClose, onSave }) {
             </div>
             <div>
               <label className={lbl}>Invoice Date *</label>
-              <input type="date" value={form.invoiceDate} onChange={e => f('invoiceDate')(e.target.value)} className={clsx(inp, errors.invoiceDate && 'border-rose-300')}/>
+              <DateField value={form.invoiceDate} onChange={e => f('invoiceDate')(e.target.value)} className={clsx(inp, errors.invoiceDate && 'border-rose-300')}/>
               {errors.invoiceDate && <p className="text-[11px] text-rose-500 mt-1">{errors.invoiceDate}</p>}
             </div>
             <div>
               <label className={lbl}>Due Date *</label>
-              <input type="date" value={form.dueDate} onChange={e => f('dueDate')(e.target.value)} className={clsx(inp, errors.dueDate && 'border-rose-300')}/>
+              <DateField value={form.dueDate} onChange={e => f('dueDate')(e.target.value)} className={clsx(inp, errors.dueDate && 'border-rose-300')}/>
               {errors.dueDate && <p className="text-[11px] text-rose-500 mt-1">{errors.dueDate}</p>}
             </div>
             <div className="col-span-2">
@@ -302,7 +302,7 @@ function RecordPaymentPanel({ invoice, onSave, onClose }) {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className={lbl}>Payment Date *</label>
-          <input type="date" value={form.date} onChange={e => f('date')(e.target.value)} className={inp}/>
+          <DateField value={form.date} onChange={e => f('date')(e.target.value)} className={inp}/>
         </div>
         <div>
           <label className={lbl}>Amount ($) *</label>
