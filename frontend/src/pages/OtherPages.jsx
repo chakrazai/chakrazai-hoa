@@ -1911,7 +1911,7 @@ const MOCK_COMMS = [
 ];
 const commTypeMap = { financial:'blue', compliance:'amber', board:'navy', delinquency:'red', announcement:'green' };
 
-const MOCK_INBOX = [
+export const MOCK_INBOX = [
   {
     id: 'in-1',
     from: 'Greenscape Landscaping',
@@ -2221,13 +2221,21 @@ function lsSaveComm(msg) {
   } catch {}
 }
 
-function InboxEmailRow({ email, onReplyAdded }) {
-  const [expanded, setExpanded] = useState(false);
+function InboxEmailRow({ email, onReplyAdded, autoOpen = false }) {
+  const [expanded, setExpanded] = useState(autoOpen);
   const [replying, setReplying] = useState(false);
   const [draft, setDraft] = useState('');
   const [generating, setGenerating] = useState(false);
   const [replied, setReplied] = useState(false);
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  useEffect(() => {
+    if (autoOpen) {
+      setExpanded(true);
+      const t = setTimeout(() => { setReplying(true); startGenerating(400); }, 200);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   const startGenerating = (ms = 700) => {
     setGenerating(true);
@@ -2271,7 +2279,7 @@ function InboxEmailRow({ email, onReplyAdded }) {
     : 'bg-emerald-100 text-emerald-700 border border-emerald-200';
 
   return (
-    <div className={clsx('border-b border-slate-50 last:border-0 transition-colors', !email.read && 'bg-blue-50/40')}>
+    <div id={`email-${email.id}`} className={clsx('border-b border-slate-50 last:border-0 transition-colors', !email.read && 'bg-blue-50/40')}>
       {/* Row header */}
       <div className="px-5 py-3.5 flex items-start gap-3 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setExpanded(v => !v)}>
         {/* Unread dot */}
@@ -2356,7 +2364,7 @@ function InboxEmailRow({ email, onReplyAdded }) {
   );
 }
 
-export function Communications() {
+export function Communications({ navParams }) {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [channel, setChannel] = useState('Email + Portal');
@@ -2369,6 +2377,15 @@ export function Communications() {
   const [showDocPicker, setShowDocPicker] = useState(false);
   const [extra, setExtra] = useState(() => lsGetComms());
   const [inbox] = useState(() => MOCK_INBOX);
+
+  useEffect(() => {
+    if (navParams?.openEmailId) {
+      const t = setTimeout(() => {
+        document.getElementById(`email-${navParams.openEmailId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [navParams?.openEmailId]);
   const fileInputRef = useRef(null);
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -2556,7 +2573,7 @@ export function Communications() {
               )}
             </div>
             {inbox.map(e => (
-              <InboxEmailRow key={e.id} email={e} onReplyAdded={msg => setExtra(prev => [msg, ...prev])} />
+              <InboxEmailRow key={e.id} email={e} onReplyAdded={msg => setExtra(prev => [msg, ...prev])} autoOpen={navParams?.openEmailId === e.id} />
             ))}
           </Card>
           {/* Sent section */}
