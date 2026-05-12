@@ -535,19 +535,7 @@ async function seedResidents(commId) {
             portal_status, auto_pay, parking_spaces, tenants, relatives,
             guest_parking_tags, garage_fobs, garage_fob_log, common_area_fobs, common_area_fob_log)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
-         ON CONFLICT (community_id, unit) DO UPDATE SET
-           owner_name = EXCLUDED.owner_name, co_owner = EXCLUDED.co_owner,
-           nit_number = EXCLUDED.nit_number, address = EXCLUDED.address,
-           email = EXCLUDED.email, phone = EXCLUDED.phone,
-           move_in_date = EXCLUDED.move_in_date, hoa_amount = EXCLUDED.hoa_amount,
-           hoa_payment_status = EXCLUDED.hoa_payment_status, balance = EXCLUDED.balance,
-           status = EXCLUDED.status, portal_status = EXCLUDED.portal_status,
-           auto_pay = EXCLUDED.auto_pay,
-           parking_spaces = EXCLUDED.parking_spaces,
-           tenants = EXCLUDED.tenants, relatives = EXCLUDED.relatives,
-           guest_parking_tags = EXCLUDED.guest_parking_tags,
-           garage_fobs = EXCLUDED.garage_fobs, garage_fob_log = EXCLUDED.garage_fob_log,
-           common_area_fobs = EXCLUDED.common_area_fobs, common_area_fob_log = EXCLUDED.common_area_fob_log`,
+         ON CONFLICT (community_id, unit) DO NOTHING`,
         [
           commId, r.unit, r.owner_name, r.co_owner, r.nit_number, r.address, r.email, r.phone,
           r.move_in_date, r.move_out_date, r.hoa_amount, r.hoa_payment_status, r.balance, r.status,
